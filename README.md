@@ -141,6 +141,9 @@ PLUGINS_CONFIG = {
 
 Важно: `PLUGINS = ['main']` соответствует имени плагина в `main/__init__.py`.
 
+Короткий пример только с настройками плагина лежит в `examples/netbox_plugin_configuration.py`.
+Этот файл не загружается автоматически; значения из него нужно перенести в `configuration.py` NetBox.
+
 #### 6. Проверьте конфигурацию Django
 
 ```bash
@@ -240,7 +243,7 @@ curl -I http://127.0.0.1:8000/static/setmode.js
 1. Откройте `http://127.0.0.1:8000/`.
 2. Войдите под суперпользователем.
 3. Проверьте, что в меню появился раздел `config-weaver`.
-4. Проверьте страницы credentials, profiles, tasks, backups и scheduled tasks.
+4. Проверьте страницы `Устройства`, `Конфигурации`, `Планировщик задач` и `Учетные данные`.
 
 #### 12. Запуск планировщика задач
 
@@ -338,8 +341,9 @@ PLUGINS_CONFIG = {
 ### Структура проекта
 
 - `main/domain/` — доменный слой: разбор YAML-плана, генерация и валидация команд, редактирование секретов.
-- `main/application/` — слой сценариев использования: выполнение задач, preview команд, бэкапы, UML preview.
+- `main/application/` — слой сценариев использования: выполнение задач, preview команд, конфигурации, UML preview.
 - `main/infrastructure/` — внешние адаптеры: SSH/Netmiko/Paramiko, Git VCS, Fernet-шифрование, ORM-репозитории.
+- `main/compat/` — совместимые re-export фасады для старых внутренних импортов.
 - `main/presentation/` — UI-адаптер NetBox: формы, фильтры, таблицы, HTML views.
 - `main/api/` — REST API-адаптер.
 - `main/models.py` — Django/NetBox модели плагина.
@@ -396,7 +400,7 @@ PLUGINS_CONFIG = {
 - Поля и атрибуты: `VENDOR_CISCO`, `VENDOR_DLINK`, `VENDOR_CHOICES`, `PLATFORM_CISCO_IOS`, `PLATFORM_CISCO_XE`, `PLATFORM_CISCO_NXOS`, `PLATFORM_DLINK_DS`, `PLATFORM_DLINK_DGS`, `PLATFORM_CHOICES`, `device`, `credential`, `vendor`, `platform`, `management_ip`, `command_timeout`, `enabled`.
 - Методы: `__str__()` возвращает устройство и платформу; `clean()` проверяет соответствие платформы выбранному вендору.
 
-`ScheduledTask` — задача планировщика для применения сценария, бэкапа или healthcheck.
+`ScheduledTask` — задача планировщика для применения сценария, сохранения конфигурации или healthcheck.
 - Поля и атрибуты: `TYPE_APPLY_SCENARIO`, `TYPE_BACKUP`, `TYPE_HEALTHCHECK`, `TYPE_CHOICES`, `STATUS_PENDING`, `STATUS_RUNNING`, `STATUS_SUCCESS`, `STATUS_FAILED`, `STATUS_CHOICES`, `task_name`, `task_type`, `target_device`, `task`, `schedule_time`, `status`, `result_message`, `run_every_seconds`, `last_run_at`, `max_retries`, `retry_count`.
 - Методы: `__str__()` возвращает имя задачи; `is_due()` проверяет, пора ли запускать задачу; `update_status(status, message)` обновляет статус, сообщение и время последнего запуска.
 
@@ -430,15 +434,15 @@ PLUGINS_CONFIG = {
 
 #### `main/application/backups.py`
 
-`ConfigurationBackupService` — use case для сохранения и сравнения конфигураций.
+`ConfigurationService` — use case для сохранения и сравнения конфигураций.
 - Поля и атрибуты: собственных атрибутов нет.
-- Методы: `save_backup(device, config_text, task=None)` сохраняет бэкап через VCS-адаптер; `compare_versions(first, second)` возвращает unified diff.
+- Методы: `save_backup(device, config_text, task=None)` сохраняет конфигурацию через VCS-адаптер; `compare_versions(first, second)` возвращает unified diff.
 
 #### `main/application/tasks.py`
 
 `TaskExecutor` — use case выполнения задач планировщика.
 - Поля и атрибуты: собственных атрибутов нет.
-- Методы: `preview_commands(task)` строит команды без применения; `_apply_commands(profile, task, commands)` применяет команды и сохраняет бэкап; `_run_apply_scenario(task)` запускает задачу применения; `_run_backup(task)` создает бэкап; `_run_healthcheck(task)` проверяет SSH-сессию; `restore_backup_to_device(backup)` восстанавливает конфигурацию из бэкапа; `_reschedule_if_periodic(task)` переносит периодическую задачу; `run_task(task)` выполняет задачу с retry-логикой; `run_due_tasks()` запускает все просроченные задачи.
+- Методы: `preview_commands(task)` строит команды без применения; `_apply_commands(profile, task, commands)` применяет команды и сохраняет конфигурацию; `_run_apply_scenario(task)` запускает задачу применения; `_run_backup(task)` сохраняет конфигурацию; `_run_healthcheck(task)` проверяет SSH-сессию; `restore_backup_to_device(backup)` активирует выбранную конфигурацию на устройстве; `_reschedule_if_periodic(task)` переносит периодическую задачу; `run_task(task)` выполняет задачу с retry-логикой; `run_due_tasks()` запускает все просроченные задачи.
 
 #### `main/application/uml.py`
 
@@ -470,19 +474,19 @@ PLUGINS_CONFIG = {
 
 `DeviceConnectionManager` — инфраструктурный сервис профиля и синхронизации running-config.
 - Поля и атрибуты: собственных атрибутов нет.
-- Методы: `get_profile(device)` возвращает активный профиль устройства; `should_verify_saved_config(device)` решает, нужна ли проверка сохраненной конфигурации; `verify_and_sync_running_config(device, running_config)` создает integrity backup при отсутствии бэкапа или drift.
+- Методы: `get_profile(device)` возвращает активный профиль устройства; `should_verify_saved_config(device)` решает, нужна ли проверка сохраненной конфигурации; `verify_and_sync_running_config(device, running_config)` сохраняет контрольную конфигурацию при отсутствии версии или drift.
 
 Функция `connect_device_cli(device, prefer='netmiko', verify_saved_config=True)` возвращает `(session, profile, check_result)`.
 
 #### `main/infrastructure/repositories.py`
 
-`ConfigurationRepository` — ORM-репозиторий для шаблонов и бэкапов.
+`ConfigurationRepository` — ORM-репозиторий для шаблонов и конфигураций.
 - Поля и атрибуты: собственных атрибутов нет.
 - Методы: `latest_backup_for_device(device_id)` возвращает последнюю версию; `compare_versions(first, second)` возвращает unified diff; `active_templates()` возвращает активные шаблоны с кешированием.
 
 #### `main/infrastructure/vcs.py`
 
-`BackupWriteResult` — dataclass результата записи бэкапа.
+`BackupWriteResult` — dataclass результата записи конфигурации.
 - Поля: `version`, `commit_hash`, `file_name`.
 - Методы: dataclass-методы создаются автоматически.
 
@@ -530,8 +534,8 @@ List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile
 - Поля и атрибуты: `queryset`, `table`, `filterset`, `form` в зависимости от типа view.
 - Методы: собственных методов нет, кроме наследуемых NetBox generic views.
 
-`ConfigurationBackupRestoreView` — action view восстановления бэкапа.
-- Методы: `post(request, pk)` запускает restore и возвращает пользователя на страницу бэкапа.
+`ConfigurationBackupRestoreView` — action view активации сохраненной конфигурации.
+- Методы: `post(request, pk)` запускает активацию и возвращает пользователя на страницу конфигурации.
 
 `ConfigurationVersionListView` — view списка версий устройства.
 - Поля и атрибуты: `template_name`.
@@ -571,7 +575,7 @@ List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile
 - Поля и атрибуты: `queryset`, `serializer_class`.
 - Методы: наследуют CRUD-поведение `NetBoxModelViewSet`.
 
-`ConfigurationBackupViewSet` — CRUD API viewset для бэкапов и версий.
+`ConfigurationBackupViewSet` — CRUD API viewset для конфигураций и версий.
 - Поля и атрибуты: `queryset`, `serializer_class`.
 - Методы: `by_device(request)` возвращает версии одного устройства; `compare(request)` сравнивает две версии и возвращает diff.
 
@@ -635,13 +639,13 @@ python manage.py run_due_tasks
 **Получить все версии для устройства:**
 
 ```
-GET /api/plugins/main/backups/by_device/?device_id=123
+GET /api/plugins/main/configurations/by_device/?device_id=123
 ```
 
 **Сравнить две версии:**
 
 ```
-GET /api/plugins/main/backups/compare/?from=1&to=2
+GET /api/plugins/main/configurations/compare/?from=1&to=2
 ```
 
 #### Git репозиторий
@@ -758,9 +762,9 @@ curl -X POST -H "Content-Type: application/json" \
 
 # Получить версии для устройства
 curl -H "Authorization: Token YOUR_API_TOKEN" \
-  http://netbox/api/plugins/main/backups/by_device/?device_id=1
+  http://netbox/api/plugins/main/configurations/by_device/?device_id=1
 
 # Сравнить две версии
 curl -H "Authorization: Token YOUR_API_TOKEN" \
-  http://netbox/api/plugins/main/backups/compare/?from=1&to=2
+  http://netbox/api/plugins/main/configurations/compare/?from=1&to=2
 ```

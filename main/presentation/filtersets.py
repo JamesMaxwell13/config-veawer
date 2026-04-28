@@ -25,7 +25,16 @@ class DeviceCredentialFilterSet(NetBoxModelFilterSet):
 class DevicePlatformProfileFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = DevicePlatformProfile
-        fields = ("id", "device", "vendor", "platform", "enabled")
+        fields = ("id", "device", "credential", "vendor", "platform", "enabled")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(device__name__icontains=value)
+            | Q(device__serial__icontains=value)
+            | Q(management_ip__icontains=value)
+        )
 
 
 @register_filterset
@@ -51,7 +60,17 @@ class NetworkTaskFilterSet(NetBoxModelFilterSet):
 class ConfigurationBackupFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = ConfigurationBackup
-        fields = ("id", "device", "task", "version", "source", "commit_hash", "config_checksum", "redacted")
+        fields = ("id", "device", "task", "version", "source", "commit_hash", "config_checksum", "redacted", "created")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(device__name__icontains=value)
+            | Q(version_name__icontains=value)
+            | Q(source__icontains=value)
+            | Q(config_checksum__icontains=value)
+        )
 
 
 @register_filterset

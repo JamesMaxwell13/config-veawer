@@ -1,16 +1,19 @@
 from django.contrib import messages
 from dcim.models import Device
+from django.contrib.auth import update_session_auth_hash
 from django.shortcuts import get_object_or_404, redirect
 from django.http import HttpResponseBadRequest
 from django.urls import reverse
 from django.views import View
-from django.views.generic import TemplateView
+from django.views.generic import FormView, TemplateView
 from netbox.views import generic
 
 from . import filtersets, forms, tables
-from ..application.backups import ConfigurationBackupService
+from ..application.backups import ConfigurationService
 from ..application.tasks import TaskExecutor
 from ..application.uml import UMLConfigurationService
+from ..infrastructure.network import connect_device_cli
+from ..infrastructure.vcs import ConfigurationVCS
 from ..models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -32,6 +35,31 @@ class DeviceCredentialView(generic.ObjectView):
     queryset = DeviceCredential.objects.all()
 
 
+class DeviceCredentialRevealView(FormView):
+    template_name = "main/devicecredential_reveal.html"
+    form_class = forms.CredentialRevealForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.credential = get_object_or_404(DeviceCredential, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["credential"] = self.credential
+        return context
+
+    def form_valid(self, form):
+        password = form.cleaned_data["account_password"]
+        if not self.request.user.check_password(password):
+            form.add_error("account_password", "Неверный пароль учетной записи NetBox.")
+            return self.form_invalid(form)
+        update_session_auth_hash(self.request, self.request.user)
+        context = self.get_context_data(form=form)
+        context["revealed_password"] = self.credential.password_plain
+        context["revealed_enable_secret"] = self.credential.enable_secret_plain
+        return self.render_to_response(context)
+
+
 class DeviceCredentialEditView(generic.ObjectEditView):
     queryset = DeviceCredential.objects.all()
     form = forms.DeviceCredentialForm
@@ -50,6 +78,13 @@ class DevicePlatformProfileListView(generic.ObjectListView):
 class DevicePlatformProfileView(generic.ObjectView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
 
+    def get_extra_context(self, request, instance):
+        return {
+            "configurations": ConfigurationBackup.objects.filter(device=instance.device).order_by("-created")[:10],
+            "scheduled_tasks": ScheduledTask.objects.filter(target_device=instance.device).order_by("-schedule_time")[:10],
+            "command_form": forms.DeviceCommandForm(),
+        }
+
 
 class DevicePlatformProfileEditView(generic.ObjectEditView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
@@ -58,6 +93,38 @@ class DevicePlatformProfileEditView(generic.ObjectEditView):
 
 class DevicePlatformProfileDeleteView(generic.ObjectDeleteView):
     queryset = DevicePlatformProfile.objects.all()
+
+
+class DevicePlatformProfileCLIView(View):
+    def post(self, request, pk):
+        profile = get_object_or_404(DevicePlatformProfile.objects.select_related("device"), pk=pk)
+        form = forms.DeviceCommandForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, "Проверьте список команд.")
+            return redirect(profile.get_absolute_url())
+
+        commands = [line.strip() for line in form.cleaned_data["commands"].splitlines() if line.strip()]
+        if not commands:
+            messages.error(request, "Введите хотя бы одну команду.")
+            return redirect(profile.get_absolute_url())
+
+        session, _profile, _check = connect_device_cli(profile.device, verify_saved_config=False)
+        try:
+            output = session.send_config_set(commands)
+            running_config = session.get_running_config()
+        finally:
+            session.disconnect()
+
+        configuration = ConfigurationVCS.write_backup(
+            profile.device,
+            running_config,
+            source="manual_cli",
+        )
+        messages.success(
+            request,
+            f"Команды выполнены. Создана конфигурация v{configuration.version}. Вывод: {output[:300]}",
+        )
+        return redirect(configuration.get_absolute_url())
 
 
 class CommandTemplateListView(generic.ObjectListView):
@@ -108,6 +175,11 @@ class ConfigurationBackupView(generic.ObjectView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
 
 
+class ConfigurationBackupEditView(generic.ObjectEditView):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+    form = forms.ConfigurationBackupForm
+
+
 class ConfigurationBackupRestoreView(View):
     def post(self, request, pk):
         backup = get_object_or_404(ConfigurationBackup, pk=pk)
@@ -115,8 +187,8 @@ class ConfigurationBackupRestoreView(View):
             result = TaskExecutor.restore_backup_to_device(backup)
             messages.success(request, result)
         except Exception as exc:
-            messages.error(request, f"Backup restore failed: {exc}")
-        return redirect(reverse("plugins:main:configurationbackup", kwargs={"pk": backup.pk}))
+            messages.error(request, f"Не удалось активировать конфигурацию: {exc}")
+        return redirect(backup.get_absolute_url())
 
 
 class ConfigurationVersionListView(TemplateView):
@@ -149,7 +221,7 @@ class ConfigurationVersionDiffView(TemplateView):
         context["device"] = device
         context["from_backup"] = b_from
         context["to_backup"] = b_to
-        context["diff"] = ConfigurationBackupService.compare_versions(b_from.config_text, b_to.config_text)
+        context["diff"] = ConfigurationService.compare_versions(b_from.config_text, b_to.config_text)
         return context
 
 

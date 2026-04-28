@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 from netbox.models import NetBoxModel
 
@@ -26,9 +27,14 @@ class DeviceCredential(NetBoxModel):
 
     class Meta:
         ordering = ("name",)
+        verbose_name = "Учетные данные"
+        verbose_name_plural = "Учетные данные"
 
     def __str__(self) -> str:
         return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:devicecredential", kwargs={"pk": self.pk})
 
     @property
     def password_plain(self) -> str:
@@ -69,9 +75,14 @@ class CommandTemplate(NetBoxModel):
     class Meta:
         ordering = ("vendor", "platform", "operation_type", "name")
         unique_together = ("name", "vendor", "platform", "operation_type")
+        verbose_name = "Шаблон команд"
+        verbose_name_plural = "Шаблоны команд"
 
     def __str__(self) -> str:
         return f"{self.name} ({self.vendor}/{self.platform})"
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:commandtemplate", kwargs={"pk": self.pk})
 
     def render(self, params: dict) -> str:
         return self.command_body.format(**params)
@@ -92,9 +103,14 @@ class NetworkTask(NetBoxModel):
 
     class Meta:
         ordering = ("name",)
+        verbose_name = "Сценарий команд"
+        verbose_name_plural = "Сценарии команд"
 
     def __str__(self) -> str:
         return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:networktask", kwargs={"pk": self.pk})
 
     @property
     def short_description(self) -> str:
@@ -119,9 +135,14 @@ class ConfigurationBackup(NetBoxModel):
     class Meta:
         ordering = ("-created",)
         unique_together = ("device", "version")
+        verbose_name = "Конфигурация"
+        verbose_name_plural = "Конфигурации"
 
     def __str__(self) -> str:
         return f"{self.device} v{self.version}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:configuration", kwargs={"pk": self.pk})
 
 
 class DevicePlatformProfile(NetBoxModel):
@@ -155,9 +176,14 @@ class DevicePlatformProfile(NetBoxModel):
 
     class Meta:
         ordering = ("device",)
+        verbose_name = "Устройство"
+        verbose_name_plural = "Устройства"
 
     def __str__(self) -> str:
-        return f"{self.device} ({self.vendor}/{self.platform})"
+        return str(self.device)
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:device", kwargs={"pk": self.pk})
 
     def clean(self):
         vendor_platform = {
@@ -180,9 +206,9 @@ class ScheduledTask(NetBoxModel):
     TYPE_BACKUP = "backup"
     TYPE_HEALTHCHECK = "healthcheck"
     TYPE_CHOICES = (
-        (TYPE_APPLY_SCENARIO, "Apply scenario"),
-        (TYPE_BACKUP, "Create backup"),
-        (TYPE_HEALTHCHECK, "Health check"),
+        (TYPE_APPLY_SCENARIO, "Применить сценарий"),
+        (TYPE_BACKUP, "Сохранить конфигурацию"),
+        (TYPE_HEALTHCHECK, "Проверить подключение"),
     )
 
     STATUS_PENDING = "pending"
@@ -212,9 +238,14 @@ class ScheduledTask(NetBoxModel):
 
     class Meta:
         ordering = ("schedule_time",)
+        verbose_name = "Задача планировщика"
+        verbose_name_plural = "Планировщик задач"
 
     def __str__(self) -> str:
         return self.task_name
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:scheduledtask", kwargs={"pk": self.pk})
 
     def is_due(self) -> bool:
         if self.status == self.STATUS_PENDING:
@@ -256,6 +287,11 @@ class UMLConfiguration(NetBoxModel):
     class Meta:
         ordering = ("name", "-revision")
         unique_together = ("name", "revision")
+        verbose_name = "UML-описание"
+        verbose_name_plural = "UML-описания"
 
     def __str__(self) -> str:
         return f"{self.name} r{self.revision}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:umlconfiguration", kwargs={"pk": self.pk})

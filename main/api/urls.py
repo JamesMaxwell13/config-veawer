@@ -14,10 +14,10 @@ app_name = "main"
 
 router = NetBoxRouter()
 router.register("credentials", DeviceCredentialViewSet)
-router.register("profiles", DevicePlatformProfileViewSet)
+router.register("devices", DevicePlatformProfileViewSet, basename="device")
 router.register("templates", CommandTemplateViewSet)
 router.register("tasks", NetworkTaskViewSet)
-router.register("backups", ConfigurationBackupViewSet)
+router.register("configurations", ConfigurationBackupViewSet, basename="configuration")
 router.register("scheduled-tasks", ScheduledTaskViewSet)
 router.register("uml-configurations", UMLConfigurationViewSet)
 

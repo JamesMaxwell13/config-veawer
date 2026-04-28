@@ -52,8 +52,8 @@ class TaskExecutor:
         finally:
             session.disconnect()
 
-        backup = ConfigurationVCS.write_backup(task.target_device, running, task=task.task, source="runtime")
-        return f"Scenario applied via {profile.vendor}/{profile.platform}; backup version={backup.version}"
+        configuration = ConfigurationVCS.write_backup(task.target_device, running, task=task.task, source="runtime")
+        return f"Сценарий применен через {profile.platform}; создана конфигурация v{configuration.version}"
 
     @classmethod
     def _run_apply_scenario(cls, task: ScheduledTask) -> str:
@@ -71,8 +71,8 @@ class TaskExecutor:
         finally:
             session.disconnect()
 
-        backup = ConfigurationVCS.write_backup(task.target_device, current_config, source="runtime")
-        return f"Backup created version={backup.version}"
+        configuration = ConfigurationVCS.write_backup(task.target_device, current_config, source="runtime")
+        return f"Конфигурация сохранена: v{configuration.version}"
 
     @staticmethod
     def _run_healthcheck(task: ScheduledTask) -> str:
@@ -99,8 +99,8 @@ class TaskExecutor:
         finally:
             session.disconnect()
 
-        new_backup = ConfigurationVCS.write_backup(backup.device, running, task=backup.task, source="restore")
-        return f"Restore applied from backup v{backup.version}; new backup v{new_backup.version}"
+        new_configuration = ConfigurationVCS.write_backup(backup.device, running, task=backup.task, source="restore")
+        return f"Активирована конфигурация v{backup.version}; текущая конфигурация сохранена как v{new_configuration.version}"
 
     @staticmethod
     def _reschedule_if_periodic(task: ScheduledTask) -> None:

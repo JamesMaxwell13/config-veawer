@@ -158,7 +158,7 @@ class Migration(migrations.Migration):
                     models.CharField(
                         choices=[
                             ("apply_scenario", "Apply scenario"),
-                            ("backup", "Create backup"),
+                            ("backup", "Сохранить конфигурацию"),
                             ("healthcheck", "Health check"),
                         ],
                         max_length=40,

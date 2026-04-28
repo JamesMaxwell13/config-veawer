@@ -1,4 +1,5 @@
 from netbox.tables import NetBoxTable
+import django_tables2 as tables
 
 from ..models import (
     CommandTemplate,
@@ -30,15 +31,20 @@ class NetworkTaskTable(NetBoxTable):
 
 
 class ConfigurationBackupTable(NetBoxTable):
+    task = tables.Column(empty_values=(), verbose_name="Сценарий")
+
+    def render_task(self, value, record):
+        return value or "-"
+
     class Meta(NetBoxTable.Meta):
         model = ConfigurationBackup
-        fields = ("device", "task", "version", "version_name", "source", "commit_hash", "config_checksum", "created")
+        fields = ("device", "version", "version_name", "source", "commit_hash", "config_checksum", "created")
 
 
 class DevicePlatformProfileTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = DevicePlatformProfile
-        fields = ("device", "credential", "vendor", "platform", "management_ip", "enabled", "last_updated")
+        fields = ("device", "credential", "platform", "management_ip", "enabled", "last_updated")
 
 
 class ScheduledTaskTable(NetBoxTable):

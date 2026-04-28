@@ -4,23 +4,23 @@ from netbox.plugins.navigation import PluginMenu, PluginMenuButton, PluginMenuIt
 
 menu_items = (
     PluginMenuItem(
-        link="plugins:main:deviceplatformprofile_list",
-        link_text="Устройства Cisco/D-Link",
+        link="plugins:main:device_list",
+        link_text="Устройства",
         buttons=(
             PluginMenuButton(
-                link="plugins:main:deviceplatformprofile_add",
-                title="Добавить профиль",
+                link="plugins:main:device_add",
+                title="Добавить устройство",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
-        link="plugins:main:networktask_list",
-        link_text="Сетевые задачи",
+        link="plugins:main:configuration_list",
+        link_text="Конфигурации",
         buttons=(
             PluginMenuButton(
-                link="plugins:main:networktask_add",
-                title="Добавить задачу",
+                link="plugins:main:configuration_add",
+                title="Создать конфигурацию",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
@@ -32,32 +32,6 @@ menu_items = (
             PluginMenuButton(
                 link="plugins:main:scheduledtask_add",
                 title="Новая задача",
-                icon_class="mdi mdi-plus-thick",
-            ),
-        ),
-    ),
-    PluginMenuItem(
-        link="plugins:main:commandtemplate_list",
-        link_text="Шаблоны команд",
-        buttons=(
-            PluginMenuButton(
-                link="plugins:main:commandtemplate_add",
-                title="Добавить шаблон",
-                icon_class="mdi mdi-plus-thick",
-            ),
-        ),
-    ),
-    PluginMenuItem(
-        link="plugins:main:configurationbackup_list",
-        link_text="Бэкапы конфигураций",
-    ),
-    PluginMenuItem(
-        link="plugins:main:umlconfiguration_list",
-        link_text="UML-конфигурации",
-        buttons=(
-            PluginMenuButton(
-                link="plugins:main:umlconfiguration_add",
-                title="Добавить UML",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
@@ -78,5 +52,5 @@ menu_items = (
 menu = PluginMenu(
     label=_("Config Weaver"),
     icon_class="mdi mdi-router-network",
-    groups=(("Управление конфигурацией", menu_items),),
+    groups=(("Управление устройствами", menu_items),),
 )

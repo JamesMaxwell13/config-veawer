@@ -1,4 +1,4 @@
-from .application.backups import ConfigurationBackupService
+from .application.backups import ConfigurationBackupService, ConfigurationService
 from .application.tasks import TaskExecutor
 from .application.uml import UMLConfigurationService
 from .domain.configuration import (
@@ -18,6 +18,7 @@ __all__ = (
     "CommandGenerator",
     "ConfigValidationError",
     "ConfigurationBackupService",
+    "ConfigurationService",
     "ConfigurationRepository",
     "ConfigurationVCS",
     "ConfigurationValidator",

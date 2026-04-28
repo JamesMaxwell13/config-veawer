@@ -22,7 +22,7 @@ from main.models import (
     ScheduledTask,
     UMLConfiguration,
 )
-from main.services import ConfigurationBackupService
+from main.services import ConfigurationService
 
 
 class DeviceCredentialViewSet(NetBoxModelViewSet):
@@ -51,7 +51,7 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
 
     @action(detail=False, methods=['get'])
     def by_device(self, request):
-        """List all versions for a specific device"""
+        """List all saved configurations for a specific device."""
         device_id = request.query_params.get('device_id')
         if not device_id:
             return Response({'error': 'device_id query parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -81,7 +81,7 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
             backup_from = ConfigurationBackup.objects.get(id=version_from_id)
             backup_to = ConfigurationBackup.objects.get(id=version_to_id)
         except ConfigurationBackup.DoesNotExist:
-            return Response({'error': 'One or both backup versions not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'One or both configurations not found'}, status=status.HTTP_404_NOT_FOUND)
         
         if backup_from.device != backup_to.device:
             return Response(
@@ -89,7 +89,7 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        diff_lines = ConfigurationBackupService.compare_versions(
+        diff_lines = ConfigurationService.compare_versions(
             backup_from.config_text,
             backup_to.config_text
         )

@@ -1,9 +1,11 @@
 from django import forms
+import hashlib
 
 from dcim.models import Device
 from netbox.forms import NetBoxModelForm
 from utilities.forms.fields import DynamicModelChoiceField
 
+from ..domain.security import redact_secrets
 from ..models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -48,6 +50,13 @@ class DeviceCredentialForm(NetBoxModelForm):
         )
 
 
+class CredentialRevealForm(forms.Form):
+    account_password = forms.CharField(
+        label="Пароль учетной записи NetBox",
+        widget=forms.PasswordInput(render_value=False),
+    )
+
+
 class DevicePlatformProfileForm(NetBoxModelForm):
     device = DynamicModelChoiceField(queryset=Device.objects.all())
     credential = DynamicModelChoiceField(queryset=DeviceCredential.objects.all())
@@ -64,6 +73,14 @@ class DevicePlatformProfileForm(NetBoxModelForm):
             "enabled",
             "tags",
         )
+
+
+class DeviceCommandForm(forms.Form):
+    commands = forms.CharField(
+        label="Команды CLI",
+        help_text="Одна команда на строку. Команды будут отправлены на устройство через настроенный профиль подключения.",
+        widget=forms.Textarea(attrs={"rows": 10}),
+    )
 
 
 class CommandTemplateForm(NetBoxModelForm):
@@ -88,9 +105,41 @@ class NetworkTaskForm(NetBoxModelForm):
 
 
 class ConfigurationBackupForm(NetBoxModelForm):
+    device = DynamicModelChoiceField(queryset=Device.objects.all())
+    task = DynamicModelChoiceField(queryset=NetworkTask.objects.all(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["version"].required = False
+        self.fields["source"].initial = self.fields["source"].initial or "manual"
+
+    def clean(self):
+        cleaned = super().clean()
+        device = cleaned.get("device")
+        if device and not cleaned.get("version"):
+            latest = ConfigurationBackup.objects.filter(device=device).order_by("-version").first()
+            cleaned["version"] = 1 if latest is None else latest.version + 1
+        return cleaned
+
+    def save(self, *args, **kwargs):
+        instance = super().save(commit=False)
+        instance.config_text = redact_secrets(instance.config_text)
+        instance.config_checksum = hashlib.sha256(instance.config_text.encode("utf-8")).hexdigest()
+        instance.redacted = True
+        if not instance.source:
+            instance.source = "manual"
+        if not instance.version_name:
+            from ..infrastructure.vcs import ConfigurationVCS
+
+            instance.version_name = ConfigurationVCS.build_version_name(instance.device)
+        if kwargs.get("commit", True):
+            instance.save()
+            self.save_m2m()
+        return instance
+
     class Meta:
         model = ConfigurationBackup
-        fields = ("device", "task", "version", "config_text", "source", "commit_hash", "tags")
+        fields = ("device", "task", "version", "version_name", "config_text", "source", "tags")
 
 
 class ScheduledTaskForm(NetBoxModelForm):
