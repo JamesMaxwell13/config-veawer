@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+import hashlib
+import json
+import re
+import subprocess
+
+from dcim.models import Device
+from django.conf import settings
+from django.utils import timezone
+
+from ..models import ConfigurationBackup, NetworkTask
+from ..security import redact_secrets
+
+
+@dataclass
+class BackupWriteResult:
+    version: int
+    commit_hash: str
+    file_name: str
+
+
+class ConfigurationVCS:
+    @staticmethod
+    def repo_path() -> Path:
+        plugin_cfg = getattr(settings, "PLUGINS_CONFIG", {}).get("main", {})
+        configured = plugin_cfg.get("vcs_repo_path")
+        path = Path(configured) if configured else Path(getattr(settings, "MEDIA_ROOT", "/tmp")) / "config_weaver_repo"
+
+        path.mkdir(parents=True, exist_ok=True)
+        if not (path / ".git").exists():
+            subprocess.run(["git", "init"], cwd=path, check=True)
+            subprocess.run(["git", "config", "user.name", "Config Weaver"], cwd=path, check=True)
+            subprocess.run(["git", "config", "user.email", "config-weaver@localhost"], cwd=path, check=True)
+        return path
+
+    @staticmethod
+    def safe_file_name(raw: str) -> str:
+        cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "_", raw).strip("_")
+        return cleaned or "device"
+
+    @staticmethod
+    def next_version(device: Device) -> int:
+        last = ConfigurationBackup.objects.filter(device=device).order_by("-version").first()
+        return 1 if not last else last.version + 1
+
+    @classmethod
+    def build_version_name(cls, device: Device, dt: datetime | None = None) -> str:
+        dt = dt or timezone.now()
+        safe_name = cls.safe_file_name(device.name)
+        return f"{dt:%Y-%m-%d-%H-%M}-{safe_name}"
+
+    @classmethod
+    def write_backup(
+        cls,
+        device: Device,
+        config_text: str,
+        task: NetworkTask | None = None,
+        source: str = "runtime",
+    ) -> ConfigurationBackup:
+        repo = cls.repo_path()
+        version = cls.next_version(device)
+        safe_name = cls.safe_file_name(device.name)
+        file_name = f"{safe_name}__v{version}.json"
+
+        redacted = redact_secrets(config_text)
+        version_name = cls.build_version_name(device)
+        payload = {
+            "device": device.name,
+            "version": version,
+            "version_name": version_name,
+            "saved_at": timezone.now().isoformat(),
+            "task": task.name if task else None,
+            "source": source,
+            "config": redacted,
+        }
+
+        (repo / file_name).write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+        subprocess.run(["git", "add", file_name], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-m", f"backup({safe_name}): version {version}"], cwd=repo, check=True)
+        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip()
+
+        return ConfigurationBackup.objects.create(
+            device=device,
+            task=task,
+            version=version,
+            version_name=version_name,
+            config_text=redacted,
+            source=source,
+            commit_hash=commit_hash,
+            config_checksum=hashlib.sha256(redacted.encode("utf-8")).hexdigest(),
+            redacted=True,
+        )

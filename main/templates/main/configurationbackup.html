@@ -1,0 +1,14 @@
+{% extends 'generic/object.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <a class="btn btn-info ms-1" href="{% url 'plugins:main:configuration_versions' device_id=object.device.pk %}">
+    <i class="mdi mdi-format-list-bulleted"></i> Versions
+  </a>
+  <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-warning">
+      <i class="mdi mdi-backup-restore"></i> Restore To Device
+    </button>
+  </form>
+{% endblock %}

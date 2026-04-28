@@ -1,0 +1,20 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}UML Preview{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>UML preview: {{ uml.name }}</span>
+    <a class="btn btn-sm btn-secondary" href="{% url 'plugins:main:umlconfiguration' pk=uml.pk %}">Back</a>
+  </div>
+  <div class="card-body">
+    <div class="mb-3 text-muted">
+      Type: {{ uml.diagram_type }} | Revision: {{ uml.revision }} | Checksum: {{ uml.checksum|default:'-' }}
+    </div>
+    <div class="border rounded p-2 bg-white">
+      {{ rendered_svg|safe }}
+    </div>
+  </div>
+</div>
+{% endblock %}

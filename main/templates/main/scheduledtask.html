@@ -1,0 +1,18 @@
+{% extends 'generic/object.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <a class="btn btn-info ms-1" href="{% url 'plugins:main:scheduledtask_preview' pk=object.pk %}">
+    <i class="mdi mdi-eye"></i> Preview Commands
+  </a>
+  <form method="post" action="{% url 'plugins:main:scheduledtask_run' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <div class="form-check d-inline-block me-2">
+      <input class="form-check-input" type="checkbox" name="confirm_create_version" id="confirmVersion{{ object.pk }}" checked required>
+      <label class="form-check-label" for="confirmVersion{{ object.pk }}">Create version</label>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="mdi mdi-play"></i> Run Now
+    </button>
+  </form>
+{% endblock %}

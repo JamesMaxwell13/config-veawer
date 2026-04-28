@@ -1,0 +1,73 @@
+from django.db.models import Q
+
+from netbox.filtersets import NetBoxModelFilterSet
+from utilities.filtersets import register_filterset
+
+from .models import (
+    CommandTemplate,
+    ConfigurationBackup,
+    DeviceCredential,
+    DevicePlatformProfile,
+    NetworkTask,
+    ScheduledTask,
+    UMLConfiguration,
+)
+
+
+@register_filterset
+class DeviceCredentialFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = DeviceCredential
+        fields = ("id", "name", "username", "auth_method", "ssh_port", "use_enable", "is_active")
+
+
+@register_filterset
+class DevicePlatformProfileFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = DevicePlatformProfile
+        fields = ("id", "device", "vendor", "platform", "enabled")
+
+
+@register_filterset
+class CommandTemplateFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = CommandTemplate
+        fields = ("id", "name", "vendor", "platform", "operation_type")
+
+
+@register_filterset
+class NetworkTaskFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = NetworkTask
+        fields = ("id", "name", "device_task", "enabled")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(description__icontains=value) | Q(device_task__icontains=value))
+
+
+@register_filterset
+class ConfigurationBackupFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = ConfigurationBackup
+        fields = ("id", "device", "scenario", "version", "source", "commit_hash", "config_checksum", "redacted")
+
+
+@register_filterset
+class ScheduledTaskFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = ScheduledTask
+        fields = ("id", "task_name", "task_type", "target_device", "status")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(task_name__icontains=value) | Q(result_message__icontains=value))
+
+
+@register_filterset
+class UMLConfigurationFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = UMLConfiguration
+        fields = ("id", "name", "diagram_type", "scenario", "device", "revision", "is_active", "checksum")

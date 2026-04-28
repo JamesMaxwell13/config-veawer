@@ -1,0 +1,51 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("credentials/", views.DeviceCredentialListView.as_view(), name="devicecredential_list"),
+    path("credentials/add/", views.DeviceCredentialEditView.as_view(), name="devicecredential_add"),
+    path("credentials/<int:pk>/", views.DeviceCredentialView.as_view(), name="devicecredential"),
+    path("credentials/<int:pk>/edit/", views.DeviceCredentialEditView.as_view(), name="devicecredential_edit"),
+    path("credentials/<int:pk>/delete/", views.DeviceCredentialDeleteView.as_view(), name="devicecredential_delete"),
+
+    path("profiles/", views.DevicePlatformProfileListView.as_view(), name="deviceplatformprofile_list"),
+    path("profiles/add/", views.DevicePlatformProfileEditView.as_view(), name="deviceplatformprofile_add"),
+    path("profiles/<int:pk>/", views.DevicePlatformProfileView.as_view(), name="deviceplatformprofile"),
+    path("profiles/<int:pk>/edit/", views.DevicePlatformProfileEditView.as_view(), name="deviceplatformprofile_edit"),
+    path("profiles/<int:pk>/delete/", views.DevicePlatformProfileDeleteView.as_view(), name="deviceplatformprofile_delete"),
+
+    path("templates/", views.CommandTemplateListView.as_view(), name="commandtemplate_list"),
+    path("templates/add/", views.CommandTemplateEditView.as_view(), name="commandtemplate_add"),
+    path("templates/<int:pk>/", views.CommandTemplateView.as_view(), name="commandtemplate"),
+    path("templates/<int:pk>/edit/", views.CommandTemplateEditView.as_view(), name="commandtemplate_edit"),
+    path("templates/<int:pk>/delete/", views.CommandTemplateDeleteView.as_view(), name="commandtemplate_delete"),
+
+    path("network-tasks/", views.NetworkTaskListView.as_view(), name="networktask_list"),
+    path("network-tasks/add/", views.NetworkTaskEditView.as_view(), name="networktask_add"),
+    path("network-tasks/<int:pk>/", views.NetworkTaskView.as_view(), name="networktask"),
+    path("network-tasks/<int:pk>/edit/", views.NetworkTaskEditView.as_view(), name="networktask_edit"),
+    path("network-tasks/<int:pk>/delete/", views.NetworkTaskDeleteView.as_view(), name="networktask_delete"),
+
+    path("backups/", views.ConfigurationBackupListView.as_view(), name="configurationbackup_list"),
+    path("backups/<int:pk>/", views.ConfigurationBackupView.as_view(), name="configurationbackup"),
+    path("backups/<int:pk>/restore/", views.ConfigurationBackupRestoreView.as_view(), name="configurationbackup_restore"),
+    path("versions/<int:device_id>/", views.ConfigurationVersionListView.as_view(), name="configuration_versions"),
+    path("versions/<int:device_id>/diff/", views.ConfigurationVersionDiffView.as_view(), name="configuration_diff"),
+
+    path("tasks/", views.ScheduledTaskListView.as_view(), name="scheduledtask_list"),
+    path("tasks/add/", views.ScheduledTaskEditView.as_view(), name="scheduledtask_add"),
+    path("tasks/<int:pk>/", views.ScheduledTaskView.as_view(), name="scheduledtask"),
+    path("tasks/<int:pk>/edit/", views.ScheduledTaskEditView.as_view(), name="scheduledtask_edit"),
+    path("tasks/<int:pk>/delete/", views.ScheduledTaskDeleteView.as_view(), name="scheduledtask_delete"),
+    path("tasks/<int:pk>/run/", views.ScheduledTaskRunNowView.as_view(), name="scheduledtask_run"),
+    path("tasks/<int:pk>/preview/", views.ScheduledTaskPreviewView.as_view(), name="scheduledtask_preview"),
+
+    path("uml/", views.UMLConfigurationListView.as_view(), name="umlconfiguration_list"),
+    path("uml/add/", views.UMLConfigurationEditView.as_view(), name="umlconfiguration_add"),
+    path("uml/<int:pk>/", views.UMLConfigurationView.as_view(), name="umlconfiguration"),
+    path("uml/<int:pk>/edit/", views.UMLConfigurationEditView.as_view(), name="umlconfiguration_edit"),
+    path("uml/<int:pk>/delete/", views.UMLConfigurationDeleteView.as_view(), name="umlconfiguration_delete"),
+    path("uml/<int:pk>/render/", views.UMLConfigurationRenderView.as_view(), name="umlconfiguration_render"),
+    path("uml/<int:pk>/preview/", views.UMLConfigurationPreviewView.as_view(), name="umlconfiguration_preview"),
+]

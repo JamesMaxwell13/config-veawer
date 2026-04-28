@@ -1,0 +1,14 @@
+{% extends 'generic/object.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <a class="btn btn-info ms-1" href="{% url 'plugins:main:umlconfiguration_preview' pk=object.pk %}">
+    <i class="mdi mdi-eye"></i> Preview
+  </a>
+  <form method="post" action="{% url 'plugins:main:umlconfiguration_render' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary">
+      <i class="mdi mdi-image-refresh"></i> Render
+    </button>
+  </form>
+{% endblock %}

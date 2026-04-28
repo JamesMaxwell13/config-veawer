@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "config-weaver"
+version = "0.2.0"
+authors = [
+    { name = "Andrew Gorokh", email = "jamesclerkmaxxwel13@gmail.com" },
+]
+description = "Django/NetBox plugin for automated network configuration management"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "PyYAML>=6.0",
+    "netmiko>=4.3.0",
+    "paramiko>=3.4.0",
+    "cryptography>=43.0.0",
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+]
