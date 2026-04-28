@@ -1,20 +1,32 @@
-from .layers.configuration import (
-    ConfigValidationError as ValidationError,
+from .application.backups import ConfigurationBackupService
+from .application.tasks import TaskExecutor
+from .application.uml import UMLConfigurationService
+from .domain.configuration import (
     CommandGenerator,
-    ConfigurationRepository,
+    ConfigValidationError,
     ConfigurationValidator,
     NetworkPlanParser,
 )
-from .layers.network import ConnectionSession, ConnectionSessionError, DeviceConnectionManager, connect_device_cli
-from .layers.tasks import TaskExecutor, UMLConfigurationService
-from .layers.vcs import BackupWriteResult, ConfigurationVCS
+from .infrastructure.network import ConnectionSession, ConnectionSessionError, DeviceConnectionManager, connect_device_cli
+from .infrastructure.repositories import ConfigurationRepository
+from .infrastructure.vcs import BackupWriteResult, ConfigurationVCS
 
+ValidationError = ConfigValidationError
 
-class ConfigurationBackupService:
-    @staticmethod
-    def save_backup(device, config_text, task=None):
-        return ConfigurationVCS.write_backup(device=device, config_text=config_text, task=task, source="runtime")
-
-    @staticmethod
-    def compare_versions(first: str, second: str):
-        return ConfigurationRepository.compare_versions(first, second)
+__all__ = (
+    "BackupWriteResult",
+    "CommandGenerator",
+    "ConfigValidationError",
+    "ConfigurationBackupService",
+    "ConfigurationRepository",
+    "ConfigurationVCS",
+    "ConfigurationValidator",
+    "ConnectionSession",
+    "ConnectionSessionError",
+    "DeviceConnectionManager",
+    "NetworkPlanParser",
+    "TaskExecutor",
+    "UMLConfigurationService",
+    "ValidationError",
+    "connect_device_cli",
+)
