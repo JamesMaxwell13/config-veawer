@@ -1,6 +1,6 @@
 from django.test import TestCase, override_settings
 
-from main.crypto import decrypt_value, encrypt_value, is_encrypted
+from main.infrastructure.crypto import decrypt_value, encrypt_value, is_encrypted
 from main.models import DeviceCredential
 
 

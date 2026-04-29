@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.cache import cache
+from django.db import close_old_connections
 from django.utils import timezone
 
 from ..domain.configuration import (
@@ -18,6 +21,8 @@ from ..models import DevicePlatformProfile, ScheduledTask
 
 
 class TaskExecutor:
+    DEFAULT_SCHEDULER_MAX_WORKERS = 8
+
     @staticmethod
     def preview_commands(task: ScheduledTask) -> list[str]:
         if not task.task:
@@ -138,11 +143,38 @@ class TaskExecutor:
                 task.update_status(ScheduledTask.STATUS_FAILED, str(exc))
 
     @classmethod
+    def scheduler_max_workers(cls) -> int:
+        plugin_cfg = getattr(settings, "PLUGINS_CONFIG", {}).get("main", {})
+        raw_value = plugin_cfg.get("scheduler_max_workers", cls.DEFAULT_SCHEDULER_MAX_WORKERS)
+        try:
+            return max(1, int(raw_value))
+        except (TypeError, ValueError):
+            return cls.DEFAULT_SCHEDULER_MAX_WORKERS
+
+    @classmethod
+    def _run_task_by_id(cls, task_id: int) -> None:
+        close_old_connections()
+        try:
+            task = ScheduledTask.objects.get(pk=task_id)
+            if task.status == ScheduledTask.STATUS_RUNNING or not task.is_due():
+                return
+            cls.run_task(task)
+        finally:
+            close_old_connections()
+
+    @classmethod
     def run_due_tasks(cls) -> int:
-        due = ScheduledTask.objects.filter(schedule_time__lte=timezone.now()).exclude(status=ScheduledTask.STATUS_RUNNING)
-        count = 0
-        for task in due:
-            if task.is_due():
-                cls.run_task(task)
-                count += 1
-        return count
+        due = (
+            ScheduledTask.objects.filter(schedule_time__lte=timezone.now())
+            .exclude(status=ScheduledTask.STATUS_RUNNING)
+        )
+        due_task_ids = [task.pk for task in due if task.is_due()]
+        if not due_task_ids:
+            return 0
+
+        with ThreadPoolExecutor(max_workers=cls.scheduler_max_workers()) as executor:
+            futures = [executor.submit(cls._run_task_by_id, task_id) for task_id in due_task_ids]
+            for future in futures:
+                future.result()
+
+        return len(due_task_ids)

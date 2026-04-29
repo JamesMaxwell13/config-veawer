@@ -135,6 +135,7 @@ PLUGINS_CONFIG = {
     'main': {
         'secret_key': 'config-weaver-local-development-secret',
         'vcs_repo_path': '/home/andrew/bsuir/diploma/config-weaver-vcs',
+        'scheduler_max_workers': 8,
     }
 }
 ```
@@ -334,6 +335,7 @@ PLUGINS_CONFIG = {
     'main': {
         'secret_key': os.getenv('CONFIG_WEAVER_SECRET_KEY', 'change-this'),
         'vcs_repo_path': os.getenv('CONFIG_WEAVER_VCS_REPO'),
+        'scheduler_max_workers': 8,
     }
 }
 ```
@@ -343,14 +345,12 @@ PLUGINS_CONFIG = {
 - `main/domain/` — доменный слой: разбор YAML-плана, генерация и валидация команд, редактирование секретов.
 - `main/application/` — слой сценариев использования: выполнение задач, preview команд, конфигурации, UML preview.
 - `main/infrastructure/` — внешние адаптеры: SSH/Netmiko/Paramiko, Git VCS, Fernet-шифрование, ORM-репозитории.
-- `main/compat/` — совместимые re-export фасады для старых внутренних импортов.
 - `main/presentation/` — UI-адаптер NetBox: формы, фильтры, таблицы, HTML views.
 - `main/api/` — REST API-адаптер.
 - `main/models.py` — Django/NetBox модели плагина.
 - `main/management/commands/` — management-команды.
 - `main/migrations/` — одна начальная миграция `0001_initial.py`.
 - `main/templates/main/` — шаблоны UI NetBox.
-- `main/services.py`, `main/crypto.py`, `main/security.py`, `main/forms.py`, `main/filtersets.py`, `main/tables.py`, `main/views.py` — совместимые фасады/re-export модули для старых импортов.
 
 ### Что делает плагин
 
@@ -617,6 +617,11 @@ List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile
 ```bash
 python manage.py run_due_tasks
 ```
+
+The scheduler executes due tasks in a bounded thread pool. By default up to
+8 tasks can run in parallel. NetBox administrators can change the limit in
+`PLUGINS_CONFIG['main']['scheduler_max_workers']`; invalid values fall back to
+8 and values lower than 1 are treated as 1.
 
 ### Version System
 

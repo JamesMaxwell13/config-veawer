@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from main.security import redact_secrets
+from main.domain.security import redact_secrets
 
 
 class RedactionTests(SimpleTestCase):

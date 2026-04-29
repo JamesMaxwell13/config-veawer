@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from netbox.models import NetBoxModel
 
-from .crypto import decrypt_value, encrypt_value, is_encrypted
+from .infrastructure.crypto import decrypt_value, encrypt_value, is_encrypted
 
 
 class DeviceCredential(NetBoxModel):

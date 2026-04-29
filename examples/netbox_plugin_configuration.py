@@ -17,5 +17,8 @@ PLUGINS_CONFIG = {
         # Optional. Git repository for saved configuration versions.
         # If omitted, the plugin falls back to MEDIA_ROOT/config_weaver_repo.
         "vcs_repo_path": "/home/andrew/bsuir/diploma/config-weaver-vcs",
+
+        # Optional. Maximum number of scheduled tasks executed in parallel.
+        "scheduler_max_workers": 8,
     }
 }

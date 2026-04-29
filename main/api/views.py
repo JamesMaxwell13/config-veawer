@@ -22,7 +22,7 @@ from main.models import (
     ScheduledTask,
     UMLConfiguration,
 )
-from main.services import ConfigurationService
+from main.application.backups import ConfigurationService
 
 
 class DeviceCredentialViewSet(NetBoxModelViewSet):

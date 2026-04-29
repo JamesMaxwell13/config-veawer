@@ -13,6 +13,7 @@ class NetBoxConfigWeaverConfig(PluginConfig):
     default_settings = {
         "vcs_repo_path": "",
         "secret_key": "",
+        "scheduler_max_workers": 8,
     }
     min_version = "4.0.0"
     max_version = "4.99.99"

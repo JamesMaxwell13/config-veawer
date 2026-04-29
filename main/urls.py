@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from .presentation import views
 
 urlpatterns = [
     path("credentials/", views.DeviceCredentialListView.as_view(), name="devicecredential_list"),
