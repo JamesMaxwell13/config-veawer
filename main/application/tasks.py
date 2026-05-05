@@ -17,6 +17,7 @@ from ..domain.configuration import (
 from ..infrastructure.network import DeviceConnectionManager, connect_device_cli
 from ..infrastructure.repositories import ConfigurationRepository
 from ..infrastructure.vcs import ConfigurationVCS
+from ..logging import device_log_context, logger, task_log_context
 from ..models import DevicePlatformProfile, ScheduledTask
 
 
@@ -50,6 +51,12 @@ class TaskExecutor:
 
     @staticmethod
     def _apply_commands(profile: DevicePlatformProfile, task: ScheduledTask, commands: list[str]) -> str:
+        logger.info(
+            "Applying command scenario %s command_count=%s %s",
+            task_log_context(task),
+            len(commands),
+            device_log_context(task.target_device, profile),
+        )
         session, _profile, _check = connect_device_cli(task.target_device, verify_saved_config=True)
         try:
             session.send_config_set(commands)
@@ -58,7 +65,17 @@ class TaskExecutor:
             session.disconnect()
 
         configuration = ConfigurationVCS.write_backup(task.target_device, running, task=task.task, source="runtime")
-        return f"Сценарий применен через {profile.platform}; создана конфигурация v{configuration.version}"
+        logger.info(
+            "Command scenario applied %s command_count=%s configuration_version=%s backup_id=%s",
+            task_log_context(task),
+            len(commands),
+            configuration.version,
+            configuration.pk,
+        )
+        return (
+            f"Сценарий применен через {profile.platform}; "
+            f"создана конфигурация v{configuration.version}"
+        )
 
     @classmethod
     def _run_apply_scenario(cls, task: ScheduledTask) -> str:
@@ -70,6 +87,7 @@ class TaskExecutor:
 
     @staticmethod
     def _run_backup(task: ScheduledTask) -> str:
+        logger.info("Running configuration backup task %s", task_log_context(task))
         session, _profile, _check = connect_device_cli(task.target_device, verify_saved_config=True)
         try:
             current_config = session.get_running_config()
@@ -77,35 +95,82 @@ class TaskExecutor:
             session.disconnect()
 
         configuration = ConfigurationVCS.write_backup(task.target_device, current_config, source="runtime")
+        logger.info(
+            "Configuration backup task completed %s configuration_version=%s backup_id=%s",
+            task_log_context(task),
+            configuration.version,
+            configuration.pk,
+        )
         return f"Конфигурация сохранена: v{configuration.version}"
 
     @staticmethod
     def _run_healthcheck(task: ScheduledTask) -> str:
+        logger.info("Running healthcheck task %s", task_log_context(task))
         try:
             session, _profile, _check = connect_device_cli(task.target_device, verify_saved_config=False)
             try:
                 alive = session.is_alive()
             finally:
                 session.disconnect()
+            logger.info("Healthcheck task completed %s alive=%s", task_log_context(task), alive)
             return f"Healthcheck {'OK' if alive else 'FAILED'} for {task.target_device.name}"
         except Exception as exc:
+            logger.warning("Healthcheck task failed %s error=%s", task_log_context(task), exc)
             return f"Healthcheck FAILED for {task.target_device.name}: {exc}"
 
     @staticmethod
     def restore_backup_to_device(backup) -> str:
+        logger.info(
+            "Restoring configuration backup %s backup_id=%s source_version=%s",
+            device_log_context(backup.device),
+            backup.pk,
+            backup.version,
+        )
         session, profile, _check = connect_device_cli(backup.device, verify_saved_config=False)
         try:
-            commands = [l.strip() for l in backup.config_text.splitlines() if l.strip() and not l.strip().startswith("!")]
+            commands = [
+                line.strip()
+                for line in backup.config_text.splitlines()
+                if line.strip() and not line.strip().startswith("!")
+            ]
             valid, errors = ConfigurationValidator.validate_commands(commands)
             if not valid:
+                logger.warning(
+                    "Restore configuration validation failed %s backup_id=%s error_count=%s",
+                    device_log_context(backup.device, profile),
+                    backup.pk,
+                    len(errors),
+                )
                 raise ConfigValidationError("; ".join(errors))
+            logger.info(
+                "Sending restore configuration commands %s backup_id=%s command_count=%s",
+                device_log_context(backup.device, profile),
+                backup.pk,
+                len(commands),
+            )
             session.send_config_set(commands)
             running = session.get_running_config()
         finally:
             session.disconnect()
 
-        new_configuration = ConfigurationVCS.write_backup(backup.device, running, task=backup.task, source="restore")
-        return f"Активирована конфигурация v{backup.version}; текущая конфигурация сохранена как v{new_configuration.version}"
+        new_configuration = ConfigurationVCS.write_backup(
+            backup.device,
+            running,
+            task=backup.task,
+            source="restore",
+        )
+        logger.info(
+            "Configuration backup restored %s backup_id=%s source_version=%s new_version=%s new_backup_id=%s",
+            device_log_context(backup.device, profile),
+            backup.pk,
+            backup.version,
+            new_configuration.version,
+            new_configuration.pk,
+        )
+        return (
+            f"Активирована конфигурация v{backup.version}; "
+            f"текущая конфигурация сохранена как v{new_configuration.version}"
+        )
 
     @staticmethod
     def _reschedule_if_periodic(task: ScheduledTask) -> None:
@@ -113,9 +178,16 @@ class TaskExecutor:
             return
         task.schedule_time = timezone.now() + timedelta(seconds=task.run_every_seconds)
         task.save(update_fields=("schedule_time", "last_updated"))
+        logger.info(
+            "Periodic task rescheduled %s next_run=%s interval_seconds=%s",
+            task_log_context(task),
+            task.schedule_time.isoformat(),
+            task.run_every_seconds,
+        )
 
     @classmethod
     def run_task(cls, task: ScheduledTask) -> None:
+        logger.info("Scheduled task started %s", task_log_context(task))
         task.update_status(ScheduledTask.STATUS_RUNNING, "Task started")
         try:
             if task.task_type == ScheduledTask.TYPE_APPLY_SCENARIO:
@@ -130,17 +202,27 @@ class TaskExecutor:
             task.retry_count = 0
             task.save(update_fields=("retry_count", "last_updated"))
             task.update_status(ScheduledTask.STATUS_SUCCESS, message)
+            logger.info("Scheduled task completed %s result=%s", task_log_context(task), message)
             cls._reschedule_if_periodic(task)
         except Exception as exc:
+            logger.exception("Scheduled task failed %s error=%s", task_log_context(task), exc)
             task.retry_count += 1
             if task.retry_count <= task.max_retries:
                 task.status = ScheduledTask.STATUS_PENDING
                 task.result_message = f"Retry scheduled ({task.retry_count}/{task.max_retries}): {exc}"
                 task.schedule_time = timezone.now() + timedelta(seconds=30)
                 task.save(update_fields=("status", "result_message", "retry_count", "schedule_time", "last_updated"))
+                logger.warning(
+                    "Scheduled task retry queued %s retry=%s max_retries=%s next_run=%s",
+                    task_log_context(task),
+                    task.retry_count,
+                    task.max_retries,
+                    task.schedule_time.isoformat(),
+                )
             else:
                 task.save(update_fields=("retry_count", "last_updated"))
                 task.update_status(ScheduledTask.STATUS_FAILED, str(exc))
+                logger.warning("Scheduled task marked failed %s", task_log_context(task))
 
     @classmethod
     def scheduler_max_workers(cls) -> int:

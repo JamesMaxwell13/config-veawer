@@ -13,6 +13,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from ..domain.security import redact_secrets
+from ..logging import device_log_context, logger
 from ..models import ConfigurationBackup, NetworkTask
 
 
@@ -32,9 +33,14 @@ class ConfigurationVCS:
 
         path.mkdir(parents=True, exist_ok=True)
         if not (path / ".git").exists():
-            subprocess.run(["git", "init"], cwd=path, check=True)
-            subprocess.run(["git", "config", "user.name", "Config Weaver"], cwd=path, check=True)
-            subprocess.run(["git", "config", "user.email", "config-weaver@localhost"], cwd=path, check=True)
+            logger.info("Initializing configuration VCS repository path=%s", path)
+            try:
+                subprocess.run(["git", "init"], cwd=path, check=True)
+                subprocess.run(["git", "config", "user.name", "Config Weaver"], cwd=path, check=True)
+                subprocess.run(["git", "config", "user.email", "config-weaver@localhost"], cwd=path, check=True)
+            except Exception:
+                logger.exception("Failed to initialize configuration VCS repository path=%s", path)
+                raise
         return path
 
     @staticmethod
@@ -78,12 +84,32 @@ class ConfigurationVCS:
             "config": redacted,
         }
 
-        (repo / file_name).write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
-        subprocess.run(["git", "add", file_name], cwd=repo, check=True)
-        subprocess.run(["git", "commit", "-m", f"backup({safe_name}): version {version}"], cwd=repo, check=True)
-        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip()
+        checksum = hashlib.sha256(redacted.encode("utf-8")).hexdigest()
+        logger.info(
+            "Writing configuration backup %s source=%s task=%s version=%s version_name=%s checksum=%s",
+            device_log_context(device),
+            source,
+            task.name if task else None,
+            version,
+            version_name,
+            checksum,
+        )
+        try:
+            (repo / file_name).write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+            subprocess.run(["git", "add", file_name], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-m", f"backup({safe_name}): version {version}"], cwd=repo, check=True)
+            commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip()
+        except Exception:
+            logger.exception(
+                "Failed to write configuration backup %s source=%s version=%s file=%s",
+                device_log_context(device),
+                source,
+                version,
+                file_name,
+            )
+            raise
 
-        return ConfigurationBackup.objects.create(
+        backup = ConfigurationBackup.objects.create(
             device=device,
             task=task,
             version=version,
@@ -91,6 +117,16 @@ class ConfigurationVCS:
             config_text=redacted,
             source=source,
             commit_hash=commit_hash,
-            config_checksum=hashlib.sha256(redacted.encode("utf-8")).hexdigest(),
+            config_checksum=checksum,
             redacted=True,
         )
+        logger.info(
+            "Configuration backup created %s source=%s version=%s backup_id=%s commit=%s checksum=%s",
+            device_log_context(device),
+            source,
+            backup.version,
+            backup.pk,
+            commit_hash,
+            checksum,
+        )
+        return backup

@@ -1,4 +1,5 @@
 from netbox.tables import NetBoxTable
+from netbox.tables.columns import ActionsColumn, TemplateColumn
 import django_tables2 as tables
 
 from ..models import (
@@ -21,7 +22,7 @@ class DeviceCredentialTable(NetBoxTable):
 class CommandTemplateTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CommandTemplate
-        fields = ("name", "vendor", "platform", "operation_type", "created", "last_updated")
+        fields = ("name", "vendor", "platform", "operation_type", "revision", "is_active", "created", "last_updated")
 
 
 class NetworkTaskTable(NetBoxTable):
@@ -42,9 +43,26 @@ class ConfigurationBackupTable(NetBoxTable):
 
 
 class DevicePlatformProfileTable(NetBoxTable):
+    device = tables.Column(linkify=True, verbose_name="Профиль Config Weaver")
+    netbox_device = TemplateColumn(
+        template_code='<a href="{{ record.device.get_absolute_url }}">{{ record.device }}</a>',
+        verbose_name="Устройство NetBox",
+        orderable=False,
+    )
+    actions = ActionsColumn(
+        extra_buttons="""
+            <a class="btn btn-sm btn-primary"
+               href="{% url 'plugins:main:deviceplatformprofile_terminal' pk=record.pk %}"
+               title="Терминал"
+               aria-label="Терминал">
+              <i class="mdi mdi-console"></i>
+            </a>
+        """
+    )
+
     class Meta(NetBoxTable.Meta):
         model = DevicePlatformProfile
-        fields = ("device", "credential", "platform", "management_ip", "enabled", "last_updated")
+        fields = ("device", "netbox_device", "credential", "platform", "management_ip", "enabled", "last_updated")
 
 
 class ScheduledTaskTable(NetBoxTable):

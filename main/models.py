@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.core.cache import cache
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -87,6 +88,15 @@ class CommandTemplate(NetBoxModel):
     def render(self, params: dict) -> str:
         return self.command_body.format(**params)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        cache.delete("cw:templates:active")
+
+    def delete(self, *args, **kwargs):
+        result = super().delete(*args, **kwargs)
+        cache.delete("cw:templates:active")
+        return result
+
 
 class NetworkTask(NetBoxModel):
     PLAN_YAML = "yaml"
@@ -142,7 +152,7 @@ class ConfigurationBackup(NetBoxModel):
         return f"{self.device} v{self.version}"
 
     def get_absolute_url(self):
-        return reverse("plugins:main:configuration", kwargs={"pk": self.pk})
+        return reverse("plugins:main:configurationbackup", kwargs={"pk": self.pk})
 
 
 class DevicePlatformProfile(NetBoxModel):
@@ -183,7 +193,7 @@ class DevicePlatformProfile(NetBoxModel):
         return str(self.device)
 
     def get_absolute_url(self):
-        return reverse("plugins:main:device", kwargs={"pk": self.pk})
+        return reverse("plugins:main:deviceplatformprofile", kwargs={"pk": self.pk})
 
     def clean(self):
         vendor_platform = {

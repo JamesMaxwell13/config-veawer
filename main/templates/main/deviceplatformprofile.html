@@ -5,6 +5,15 @@
   <a class="btn btn-secondary ms-1" href="{% url 'dcim:device' pk=object.device.pk %}">
     <i class="mdi mdi-server-network"></i> Устройство NetBox
   </a>
+  <a class="btn btn-primary ms-1" href="{% url 'plugins:main:deviceplatformprofile_terminal' pk=object.pk %}">
+    <i class="mdi mdi-console"></i> Терминал
+  </a>
+  <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-info">
+      <i class="mdi mdi-refresh"></i> Получить конфиг
+    </button>
+  </form>
 {% endblock %}
 
 {% block content %}
@@ -15,7 +24,7 @@
       <div class="card">
         <h5 class="card-header">CLI устройства</h5>
         <div class="card-body">
-          <form id="device-cli-form" method="post" action="{% url 'plugins:main:device_cli' pk=object.pk %}">
+          <form id="device-cli-form" method="post" action="{% url 'plugins:main:deviceplatformprofile_cli' pk=object.pk %}">
             {% csrf_token %}
             {{ command_form.as_p }}
             <button type="submit" class="btn btn-primary">

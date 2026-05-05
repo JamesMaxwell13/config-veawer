@@ -1,5 +1,7 @@
 from django import forms
 import hashlib
+import json
+import yaml
 
 from dcim.models import Device
 from netbox.forms import NetBoxModelForm
@@ -78,12 +80,26 @@ class DevicePlatformProfileForm(NetBoxModelForm):
 class DeviceCommandForm(forms.Form):
     commands = forms.CharField(
         label="Команды CLI",
-        help_text="Одна команда на строку. Команды будут отправлены на устройство через настроенный профиль подключения.",
+        help_text=(
+            "Одна команда на строку. Команды будут отправлены на устройство "
+            "через настроенный профиль подключения."
+        ),
         widget=forms.Textarea(attrs={"rows": 10}),
     )
 
 
 class CommandTemplateForm(NetBoxModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["name"].help_text = (
+            "Уникальное имя операции, например interface_l3 или access_vlan."
+        )
+        self.fields["command_body"].help_text = (
+            "Одна CLI-команда на строку. "
+            "Параметры указываются в фигурных скобках: "
+            "{interface}, {description}, {ip}, {mask}, {vlan_id}."
+        )
+
     class Meta:
         model = CommandTemplate
         fields = (
@@ -96,6 +112,35 @@ class CommandTemplateForm(NetBoxModelForm):
             "revision",
             "tags",
         )
+
+
+class CommandTemplatePreviewForm(forms.Form):
+    params = forms.CharField(
+        label="Параметры шаблона",
+        required=False,
+        help_text=(
+            "YAML или JSON mapping с параметрами, "
+            "например: interface: GigabitEthernet0/1"
+        ),
+        widget=forms.Textarea(attrs={"rows": 8}),
+    )
+
+    def clean_params(self):
+        raw = self.cleaned_data["params"]
+        if not raw.strip():
+            return {}
+        try:
+            data = yaml.safe_load(raw)
+        except yaml.YAMLError:
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise forms.ValidationError(f"Не удалось разобрать YAML/JSON: {exc}") from exc
+        if data is None:
+            return {}
+        if not isinstance(data, dict):
+            raise forms.ValidationError("Параметры должны быть mapping/object.")
+        return data
 
 
 class NetworkTaskForm(NetBoxModelForm):

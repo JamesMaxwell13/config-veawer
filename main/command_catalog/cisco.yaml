@@ -1,0 +1,376 @@
+vendor: cisco
+templates:
+  - name: hostname
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Set device hostname.
+    params: [hostname]
+    command_body: |
+      hostname {hostname}
+
+  - name: interface_description
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Set interface description.
+    params: [interface, description]
+    command_body: |
+      interface {interface}
+      description {description}
+
+  - name: interface_enter
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Enter interface configuration mode.
+    params: [interface]
+    command_body: |
+      interface {interface}
+
+  - name: description
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Set description under an interface.
+    params: [interface, description]
+    command_body: |
+      interface {interface}
+      description {description}
+
+  - name: interface_shutdown
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Shut down an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      shutdown
+
+  - name: interface_no_shutdown
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Enable an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no shutdown
+
+  - name: interface_l3
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure routed interface IPv4 address.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      no switchport
+      ip address {ip} {mask}
+      no shutdown
+
+  - name: interface_ip
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure interface IPv4 address.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      ip address {ip} {mask}
+      no shutdown
+
+  - name: ip_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv4 address under an interface.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      ip address {ip} {mask}
+
+  - name: vlan_create
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Create VLAN and set its name.
+    params: [vlan_id, name]
+    command_body: |
+      vlan {vlan_id}
+      name {name}
+
+  - name: vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Enter VLAN configuration mode.
+    params: [vlan_id]
+    command_body: |
+      vlan {vlan_id}
+
+  - name: vlan_name
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set VLAN name.
+    params: [vlan_id, name]
+    command_body: |
+      vlan {vlan_id}
+      name {name}
+
+  - name: access_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure an access port VLAN.
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport mode access
+      switchport access vlan {vlan_id}
+      no shutdown
+
+  - name: switchport_mode_access
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set switchport access mode.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      switchport mode access
+
+  - name: switchport_access_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Assign access VLAN to switchport.
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport access vlan {vlan_id}
+
+  - name: trunk_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure a trunk port allowed VLAN list.
+    params: [interface, vlan_list]
+    command_body: |
+      interface {interface}
+      switchport mode trunk
+      switchport trunk allowed vlan {vlan_list}
+      no shutdown
+
+  - name: switchport_mode_trunk
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set switchport trunk mode.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      switchport mode trunk
+
+  - name: default_gateway
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure default gateway for L2 switch management.
+    params: [gateway]
+    command_body: |
+      ip default-gateway {gateway}
+
+  - name: static_route
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv4 static route.
+    params: [network, mask, next_hop]
+    command_body: |
+      ip route {network} {mask} {next_hop}
+
+  - name: numbered_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add numbered access-list permit rule.
+    params: [number, source, wildcard]
+    command_body: |
+      access-list {number} permit {source} {wildcard}
+
+  - name: numbered_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add numbered access-list deny rule.
+    params: [number, source, wildcard]
+    command_body: |
+      access-list {number} deny {source} {wildcard}
+
+  - name: standard_acl
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter standard named ACL configuration mode.
+    params: [name]
+    command_body: |
+      ip access-list standard {name}
+
+  - name: standard_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add permit rule to a standard named ACL.
+    params: [name, source, wildcard]
+    command_body: |
+      ip access-list standard {name}
+      permit {source} {wildcard}
+
+  - name: standard_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add deny rule to a standard named ACL.
+    params: [name, source, wildcard]
+    command_body: |
+      ip access-list standard {name}
+      deny {source} {wildcard}
+
+  - name: extended_acl
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter extended named ACL configuration mode.
+    params: [name]
+    command_body: |
+      ip access-list extended {name}
+
+  - name: extended_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add permit rule to an extended named ACL.
+    params: [name, protocol, src, src_wildcard, dst, dst_wildcard]
+    command_body: |
+      ip access-list extended {name}
+      permit {protocol} {src} {src_wildcard} {dst} {dst_wildcard}
+
+  - name: extended_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add deny rule to an extended named ACL.
+    params: [name, protocol, src, src_wildcard, dst, dst_wildcard]
+    command_body: |
+      ip access-list extended {name}
+      deny {protocol} {src} {src_wildcard} {dst} {dst_wildcard}
+
+  - name: dhcp_pool
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enter DHCP pool configuration mode.
+    params: [name]
+    command_body: |
+      ip dhcp pool {name}
+
+  - name: dhcp_pool_network
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool network.
+    params: [name, network, mask]
+    command_body: |
+      ip dhcp pool {name}
+      network {network} {mask}
+
+  - name: dhcp_pool_default_router
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool default router.
+    params: [name, gateway]
+    command_body: |
+      ip dhcp pool {name}
+      default-router {gateway}
+
+  - name: dhcp_pool_dns_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool DNS server.
+    params: [name, dns]
+    command_body: |
+      ip dhcp pool {name}
+      dns-server {dns}
+
+  - name: dhcp_pool_full
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool with network, gateway, and DNS.
+    params: [name, network, mask, gateway, dns]
+    command_body: |
+      ip dhcp pool {name}
+      network {network} {mask}
+      default-router {gateway}
+      dns-server {dns}
+
+  - name: dhcp_excluded_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Exclude DHCP address range.
+    params: [start_ip, end_ip]
+    command_body: |
+      ip dhcp excluded-address {start_ip} {end_ip}
+
+  - name: nat_inside
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Mark an interface as NAT inside.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ip nat inside
+
+  - name: nat_outside
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Mark an interface as NAT outside.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ip nat outside
+
+  - name: nat_overload
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure PAT overload using an ACL and outside interface.
+    params: [acl, interface]
+    command_body: |
+      ip nat inside source list {acl} interface {interface} overload
+
+  - name: nat_static
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure static NAT mapping.
+    params: [inside_ip, outside_ip]
+    command_body: |
+      ip nat inside source static {inside_ip} {outside_ip}
+
+  - name: save_config
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Save running configuration.
+    params: []
+    command_body: |
+      write memory

@@ -47,6 +47,10 @@ class NetworkPlanParser:
 
 class CommandGenerator:
     @staticmethod
+    def split_rendered_commands(rendered: str) -> list[str]:
+        return [line.strip() for line in rendered.splitlines() if line.strip()]
+
+    @staticmethod
     def generate_interface_config(interface: dict[str, Any]) -> list[str]:
         commands = [f"interface {interface['name']}"]
         if interface.get("description"):
@@ -57,32 +61,87 @@ class CommandGenerator:
         return commands
 
     @staticmethod
-    def _resolve_template_key(operation: dict[str, Any], profile: DevicePlatformProfile) -> tuple[str, str, str]:
+    def _resolve_template_key(
+        operation: dict[str, Any],
+        profile: DevicePlatformProfile,
+    ) -> tuple[str, str, str, str | None]:
         vendor = str(operation.get("vendor") or profile.vendor).lower()
         platform = str(operation.get("platform") or profile.platform).lower()
-        op_type = str(operation.get("operation_type") or CommandTemplate.OP_CUSTOM)
-        return vendor, platform, op_type
+        op_type = str(operation.get("operation_type") or CommandTemplate.OP_CUSTOM).lower()
+        name = operation.get("name")
+        return vendor, platform, op_type, str(name).lower() if name else None
+
+    @classmethod
+    def _append_raw_commands(cls, commands: list[str], raw_commands: Any) -> None:
+        if raw_commands is None:
+            return
+        if isinstance(raw_commands, str):
+            commands.extend(cls.split_rendered_commands(raw_commands))
+            return
+        if isinstance(raw_commands, list):
+            for command in raw_commands:
+                if not isinstance(command, str):
+                    raise ConfigValidationError("Each raw command must be a string")
+                commands.extend(cls.split_rendered_commands(command))
+            return
+        raise ConfigValidationError("'raw_commands' must be a string or a list of strings")
 
     @classmethod
     def generate_commands(
         cls,
         plan: dict[str, Any],
-        templates: list[CommandTemplate],
+        templates: list[Any],
         profile: DevicePlatformProfile,
     ) -> list[str]:
         commands: list[str] = []
         for interface in plan.get("interfaces", []):
             commands.extend(cls.generate_interface_config(interface))
-        template_index = {(t.vendor.lower(), t.platform.lower(), t.operation_type): t for t in templates}
+
+        template_index = {
+            (t.vendor.lower(), t.platform.lower(), t.operation_type.lower(), t.name.lower()): t
+            for t in templates
+        }
+        legacy_index = {
+            (t.vendor.lower(), t.platform.lower(), t.operation_type.lower()): t
+            for t in templates
+            if not hasattr(t, "source")
+        }
+
         for operation in plan.get("operations", []):
-            key = cls._resolve_template_key(operation, profile)
-            template = template_index.get(key)
+            if not isinstance(operation, dict):
+                raise ConfigValidationError("Each operation must be a mapping")
+            cls._append_raw_commands(commands, operation.get("raw_commands"))
+
+            vendor, platform, op_type, name = cls._resolve_template_key(operation, profile)
+            template = template_index.get((vendor, platform, op_type, name)) if name else None
+            if template is None and name:
+                same_platform = [
+                    t for key, t in template_index.items()
+                    if key[0] == vendor and key[1] == platform and key[3] == name
+                ]
+                same_vendor = [
+                    t for key, t in template_index.items()
+                    if key[0] == vendor and key[3] == name
+                ]
+                template = same_platform[0] if same_platform else same_vendor[0] if len(same_vendor) == 1 else None
+            if template is None and not name:
+                template = legacy_index.get((vendor, platform, op_type))
+                if template is None:
+                    same_vendor = [
+                        t for key, t in legacy_index.items()
+                        if key[0] == vendor and key[2] == op_type
+                    ]
+                    template = same_vendor[0] if len(same_vendor) == 1 else None
             if not template:
-                continue
+                if operation.get("raw_commands"):
+                    continue
+                template_ref = name or op_type
+                raise ConfigValidationError(f"No command template for {vendor}/{platform}: {template_ref}")
             try:
-                commands.append(template.render(operation.get("params", {})))
+                commands.extend(cls.split_rendered_commands(template.render(operation.get("params", {}))))
             except KeyError as exc:
                 raise ConfigValidationError(f"Template '{template.name}' misses required param: {exc}") from exc
+        cls._append_raw_commands(commands, plan.get("raw_commands"))
         return commands
 
 

@@ -61,7 +61,7 @@ source venv/bin/activate
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install pyyaml netmiko paramiko cryptography
+/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install pyyaml netmiko paramiko cryptography channels daphne
 ```
 
 #### 4. Установите плагин в editable-режиме
@@ -214,6 +214,13 @@ NetBox будет доступен:
 
 ```text
 http://127.0.0.1:8000/
+```
+
+Ручный терминал устройства использует WebSocket, поэтому для него NetBox нужно запускать через ASGI/Daphne:
+
+```bash
+cd /home/andrew/bsuir/diploma/netbox/netbox
+DJANGO_SETTINGS_MODULE=netbox.settings /home/andrew/bsuir/diploma/netbox/venv/bin/daphne -b 0.0.0.0 -p 8000 main.asgi:application
 ```
 
 Проверка ответа приложения:

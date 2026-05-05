@@ -1,0 +1,92 @@
+vendor: dlink
+templates:
+  - name: hostname
+    platform: dlink_ds
+    operation_type: custom
+    revision: 1
+    description: Set device system name.
+    params: [hostname]
+    command_body: |
+      config snmp system_name {hostname}
+
+  - name: interface_description
+    platform: dlink_ds
+    operation_type: interface
+    revision: 1
+    description: Set port description.
+    params: [interface, description]
+    command_body: |
+      config ports {interface} description "{description}"
+
+  - name: interface_shutdown
+    platform: dlink_ds
+    operation_type: interface
+    revision: 1
+    description: Disable a port.
+    params: [interface]
+    command_body: |
+      config ports {interface} state disable
+
+  - name: interface_no_shutdown
+    platform: dlink_ds
+    operation_type: interface
+    revision: 1
+    description: Enable a port.
+    params: [interface]
+    command_body: |
+      config ports {interface} state enable
+
+  - name: vlan_create
+    platform: dlink_ds
+    operation_type: vlan
+    revision: 1
+    description: Create VLAN.
+    params: [vlan_id, name]
+    command_body: |
+      create vlan {name} tag {vlan_id}
+
+  - name: access_vlan
+    platform: dlink_ds
+    operation_type: vlan
+    revision: 1
+    description: Configure untagged access VLAN on port.
+    params: [interface, vlan_id]
+    command_body: |
+      config vlan vlanid {vlan_id} add untagged {interface}
+      config ports {interface} pvid {vlan_id}
+
+  - name: trunk_vlan
+    platform: dlink_ds
+    operation_type: vlan
+    revision: 1
+    description: Configure tagged VLAN on trunk port.
+    params: [interface, vlan_id]
+    command_body: |
+      config vlan vlanid {vlan_id} add tagged {interface}
+
+  - name: management_ip
+    platform: dlink_ds
+    operation_type: ip
+    revision: 1
+    description: Configure management IPv4 interface.
+    params: [vlan_name, ip, mask]
+    command_body: |
+      config ipif System ipaddress {ip} {mask} vlan {vlan_name} state enable
+
+  - name: default_gateway
+    platform: dlink_ds
+    operation_type: ip
+    revision: 1
+    description: Configure default route.
+    params: [gateway]
+    command_body: |
+      create iproute default {gateway} 1
+
+  - name: save_config
+    platform: dlink_ds
+    operation_type: custom
+    revision: 1
+    description: Save configuration.
+    params: []
+    command_body: |
+      save

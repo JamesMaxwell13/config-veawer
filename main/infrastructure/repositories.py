@@ -4,6 +4,7 @@ from difflib import unified_diff
 
 from django.core.cache import cache
 
+from ..domain.command_catalog import CatalogCommandTemplate, CommandCatalog
 from ..models import CommandTemplate, ConfigurationBackup
 
 
@@ -17,11 +18,11 @@ class ConfigurationRepository:
         return list(unified_diff(first.splitlines(), second.splitlines(), lineterm=""))
 
     @staticmethod
-    def active_templates() -> list[CommandTemplate]:
+    def active_templates() -> list[CommandTemplate | CatalogCommandTemplate]:
         key = "cw:templates:active"
         cached = cache.get(key)
         if cached is not None:
             return cached
-        templates = list(CommandTemplate.objects.filter(is_active=True))
+        templates = CommandCatalog.merge_with_database(list(CommandTemplate.objects.filter(is_active=True)))
         cache.set(key, templates, timeout=120)
         return templates

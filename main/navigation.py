@@ -4,22 +4,22 @@ from netbox.plugins.navigation import PluginMenu, PluginMenuButton, PluginMenuIt
 
 menu_items = (
     PluginMenuItem(
-        link="plugins:main:device_list",
+        link="plugins:main:deviceplatformprofile_list",
         link_text="Устройства",
         buttons=(
             PluginMenuButton(
-                link="plugins:main:device_add",
+                link="plugins:main:deviceplatformprofile_add",
                 title="Добавить устройство",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
-        link="plugins:main:configuration_list",
+        link="plugins:main:configurationbackup_list",
         link_text="Конфигурации",
         buttons=(
             PluginMenuButton(
-                link="plugins:main:configuration_add",
+                link="plugins:main:configurationbackup_add",
                 title="Создать конфигурацию",
                 icon_class="mdi mdi-plus-thick",
             ),
@@ -32,6 +32,17 @@ menu_items = (
             PluginMenuButton(
                 link="plugins:main:scheduledtask_add",
                 title="Новая задача",
+                icon_class="mdi mdi-plus-thick",
+            ),
+        ),
+    ),
+    PluginMenuItem(
+        link="plugins:main:commandtemplate_list",
+        link_text="Шаблоны команд",
+        buttons=(
+            PluginMenuButton(
+                link="plugins:main:commandtemplate_add",
+                title="Добавить шаблон команд",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),

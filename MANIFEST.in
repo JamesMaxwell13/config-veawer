@@ -1,0 +1,3 @@
+recursive-include main/command_catalog *.yaml
+recursive-include main/static *
+recursive-include main/templates *.html

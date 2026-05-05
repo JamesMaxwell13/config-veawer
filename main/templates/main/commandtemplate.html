@@ -1,0 +1,8 @@
+{% extends 'generic/object.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <a class="btn btn-secondary ms-1" href="{% url 'plugins:main:commandtemplate_preview' pk=object.pk %}">
+    <i class="mdi mdi-eye-outline"></i> Предпросмотр
+  </a>
+{% endblock %}

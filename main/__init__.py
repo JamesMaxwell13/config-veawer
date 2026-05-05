@@ -9,6 +9,7 @@ class NetBoxConfigWeaverConfig(PluginConfig):
     author = "Andrew Gorokh"
     author_email = "jamesclerkmaxxwel13@gmail.com"
     base_url = "config-weaver"
+    template_extensions = "template_content.template_extensions"
     required_settings = ["secret_key"]
     default_settings = {
         "vcs_repo_path": "",

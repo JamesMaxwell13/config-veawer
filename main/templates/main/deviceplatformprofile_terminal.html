@@ -1,0 +1,59 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block title %}Терминал {{ object.device }}{% endblock %}
+
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h2 mb-1">Терминал {{ object.device }}</h1>
+      <div class="text-muted">
+        {{ object.get_platform_display }}{% if object.management_ip %} · {{ object.management_ip }}{% endif %}
+      </div>
+    </div>
+    <div class="btn-list">
+      <a class="btn btn-secondary" href="{{ object.get_absolute_url }}">
+        <i class="mdi mdi-arrow-left"></i> К устройству
+      </a>
+      <button type="button" class="btn btn-danger" id="terminal-disconnect">
+        <i class="mdi mdi-lan-disconnect"></i> Отключиться
+      </button>
+    </div>
+  </div>
+
+  <div
+    id="device-terminal"
+    data-ws-path="{{ terminal_ws_path }}"
+    class="card"
+  >
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="card-title mb-0">SSH configure terminal</h5>
+      <span id="terminal-status" class="badge bg-secondary">Подключение</span>
+    </div>
+    <div class="card-body">
+      <pre
+        id="terminal-output"
+        class="bg-dark text-green p-3 rounded font-monospace"
+        style="height: 60vh; overflow: auto; white-space: pre-wrap;"
+      ></pre>
+      <div class="input-group mt-3">
+        <textarea
+          id="terminal-input"
+          class="form-control font-monospace"
+          rows="2"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Введите команду и нажмите Enter"
+        ></textarea>
+        <button type="button" class="btn btn-primary" id="terminal-send">
+          <i class="mdi mdi-send"></i> Отправить
+        </button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'main/device_terminal.js' %}"></script>
+{% endblock %}

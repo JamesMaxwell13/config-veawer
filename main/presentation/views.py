@@ -1,19 +1,23 @@
 from django.contrib import messages
 from dcim.models import Device
 from django.contrib.auth import update_session_auth_hash
+from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect
 from django.http import HttpResponseBadRequest
 from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
 from netbox.views import generic
+from utilities.views import ObjectPermissionRequiredMixin
 
 from . import filtersets, forms, tables
 from ..application.backups import ConfigurationService
 from ..application.tasks import TaskExecutor
 from ..application.uml import UMLConfigurationService
+from ..domain.configuration import CommandGenerator
 from ..infrastructure.network import connect_device_cli
 from ..infrastructure.vcs import ConfigurationVCS
+from ..logging import device_log_context, logger
 from ..models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -108,6 +112,12 @@ class DevicePlatformProfileCLIView(View):
             messages.error(request, "Введите хотя бы одну команду.")
             return redirect(profile.get_absolute_url())
 
+        logger.info(
+            "Manual CLI command execution requested %s command_count=%s user=%s",
+            device_log_context(profile.device, profile),
+            len(commands),
+            request.user,
+        )
         session, _profile, _check = connect_device_cli(profile.device, verify_saved_config=False)
         try:
             output = session.send_config_set(commands)
@@ -120,11 +130,70 @@ class DevicePlatformProfileCLIView(View):
             running_config,
             source="manual_cli",
         )
+        logger.info(
+            "Manual CLI command execution completed "
+            "%s command_count=%s configuration_version=%s backup_id=%s user=%s",
+            device_log_context(profile.device, profile),
+            len(commands),
+            configuration.version,
+            configuration.pk,
+            request.user,
+        )
         messages.success(
             request,
-            f"Команды выполнены. Создана конфигурация v{configuration.version}. Вывод: {output[:300]}",
+            (
+                "Команды выполнены. "
+                f"Создана конфигурация v{configuration.version}. "
+                f"Вывод: {output[:300]}"
+            ),
         )
         return redirect(configuration.get_absolute_url())
+
+
+class DevicePlatformProfileRefreshConfigView(ObjectPermissionRequiredMixin, View):
+    queryset = DevicePlatformProfile.objects.select_related("device", "credential")
+
+    def get_required_permission(self):
+        return "main.change_deviceplatformprofile"
+
+    def post(self, request, pk):
+        profile = get_object_or_404(self.queryset, pk=pk)
+        try:
+            result = ConfigurationService.refresh_device_config(profile.device)
+        except Exception as exc:
+            messages.error(request, f"Не удалось получить конфигурацию: {exc}")
+            logger.exception(
+                "Manual device configuration refresh failed %s user=%s",
+                device_log_context(profile.device, profile),
+                request.user,
+            )
+            return redirect(profile.get_absolute_url())
+
+        backup = result["backup"]
+        if result["changed"]:
+            messages.success(request, f"Конфигурация обновлена. Создана версия v{backup.version}.")
+        else:
+            messages.success(request, f"Конфигурация не изменилась. Текущая версия v{backup.version}.")
+        return redirect(backup.get_absolute_url())
+
+
+class DevicePlatformProfileTerminalView(ObjectPermissionRequiredMixin, TemplateView):
+    queryset = DevicePlatformProfile.objects.select_related("device", "credential")
+    template_name = "main/deviceplatformprofile_terminal.html"
+
+    def get_required_permission(self):
+        return "main.change_deviceplatformprofile"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        profile = get_object_or_404(self.queryset, pk=kwargs["pk"])
+        base_path = settings.BASE_PATH.strip("/")
+        base_url = f"/{base_path}/" if base_path else "/"
+        context["object"] = profile
+        context["terminal_ws_path"] = (
+            f"{base_url}ws/plugins/config-weaver/devices/{profile.pk}/terminal/"
+        )
+        return context
 
 
 class CommandTemplateListView(generic.ObjectListView):
@@ -144,6 +213,34 @@ class CommandTemplateEditView(generic.ObjectEditView):
 
 class CommandTemplateDeleteView(generic.ObjectDeleteView):
     queryset = CommandTemplate.objects.all()
+
+
+class CommandTemplatePreviewView(FormView):
+    template_name = "main/commandtemplate_preview.html"
+    form_class = forms.CommandTemplatePreviewForm
+
+    def dispatch(self, request, *args, **kwargs):
+        self.template = get_object_or_404(CommandTemplate, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        return {"params": "interface: GigabitEthernet0/1\nip: 10.0.0.1\nmask: 255.255.255.0\n"}
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["template"] = self.template
+        context.setdefault("commands", [])
+        return context
+
+    def form_valid(self, form):
+        context = self.get_context_data(form=form)
+        try:
+            rendered = self.template.render(form.cleaned_data["params"])
+            context["commands"] = CommandGenerator.split_rendered_commands(rendered)
+        except KeyError as exc:
+            form.add_error("params", f"Не хватает параметра: {exc}")
+            return self.form_invalid(form)
+        return self.render_to_response(context)
 
 
 class NetworkTaskListView(generic.ObjectListView):
@@ -180,14 +277,72 @@ class ConfigurationBackupEditView(generic.ObjectEditView):
     form = forms.ConfigurationBackupForm
 
 
+class ConfigurationBackupDeleteView(generic.ObjectDeleteView):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+
+
 class ConfigurationBackupRestoreView(View):
     def post(self, request, pk):
         backup = get_object_or_404(ConfigurationBackup, pk=pk)
+        logger.info(
+            "Configuration restore requested %s backup_id=%s source_version=%s user=%s",
+            device_log_context(backup.device),
+            backup.pk,
+            backup.version,
+            request.user,
+        )
         try:
             result = TaskExecutor.restore_backup_to_device(backup)
             messages.success(request, result)
+            logger.info(
+                "Configuration restore request completed %s backup_id=%s user=%s",
+                device_log_context(backup.device),
+                backup.pk,
+                request.user,
+            )
         except Exception as exc:
             messages.error(request, f"Не удалось активировать конфигурацию: {exc}")
+            logger.exception(
+                "Configuration restore request failed %s backup_id=%s user=%s",
+                device_log_context(backup.device),
+                backup.pk,
+                request.user,
+            )
+        return redirect(backup.get_absolute_url())
+
+
+class ConfigurationBackupRefreshView(ObjectPermissionRequiredMixin, View):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+
+    def get_required_permission(self):
+        return "main.change_configurationbackup"
+
+    def post(self, request, pk):
+        backup = get_object_or_404(self.queryset, pk=pk)
+        try:
+            result = ConfigurationService.refresh_device_config(
+                backup.device,
+                compare_to=backup,
+                source="manual_refresh",
+            )
+        except Exception as exc:
+            messages.error(request, f"Не удалось проверить конфигурацию: {exc}")
+            logger.exception(
+                "Manual configuration backup refresh failed %s backup_id=%s user=%s",
+                device_log_context(backup.device),
+                backup.pk,
+                request.user,
+            )
+            return redirect(backup.get_absolute_url())
+
+        refreshed = result["backup"]
+        if result["changed"]:
+            messages.warning(
+                request,
+                f"Конфигурация на устройстве отличается. Создана новая версия v{refreshed.version}.",
+            )
+            return redirect(refreshed.get_absolute_url())
+        messages.success(request, f"Конфигурация на устройстве совпадает с v{backup.version}.")
         return redirect(backup.get_absolute_url())
 
 
@@ -250,6 +405,12 @@ class ScheduledTaskRunNowView(View):
         if confirm != "on":
             return HttpResponseBadRequest("Version creation confirmation is required.")
         task = get_object_or_404(ScheduledTask, pk=pk)
+        logger.info(
+            "Manual scheduled task run requested task=%s task_id=%s user=%s",
+            task.task_name,
+            task.pk,
+            request.user,
+        )
         TaskExecutor.run_task(task)
         task.refresh_from_db()
         if task.status == ScheduledTask.STATUS_SUCCESS:

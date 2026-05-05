@@ -5,7 +5,13 @@
   <a class="btn btn-info ms-1" href="{% url 'plugins:main:configuration_versions' device_id=object.device.pk %}">
     <i class="mdi mdi-format-list-bulleted"></i> Версии устройства
   </a>
-  <form method="post" action="{% url 'plugins:main:configuration_activate' pk=object.pk %}" class="d-inline-block ms-1">
+  <form method="post" action="{% url 'plugins:main:configurationbackup_refresh' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-info">
+      <i class="mdi mdi-refresh"></i> Проверить конфиг
+    </button>
+  </form>
+  <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-warning">
       <i class="mdi mdi-backup-restore"></i> Активировать конфигурацию
