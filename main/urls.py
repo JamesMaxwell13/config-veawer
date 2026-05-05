@@ -77,6 +77,7 @@ urlpatterns = [
     path("configurations/", views.ConfigurationBackupListView.as_view(), name="configurationbackup_list"),
     path("configurations/add/", views.ConfigurationBackupEditView.as_view(), name="configurationbackup_add"),
     path("configurations/<int:pk>/", views.ConfigurationBackupView.as_view(), name="configurationbackup"),
+    path("configurations/<int:pk>/yaml/", views.ConfigurationBackupYAMLView.as_view(), name="configurationbackup_yaml"),
     path("configurations/<int:pk>/edit/", views.ConfigurationBackupEditView.as_view(), name="configurationbackup_edit"),
     path("configurations/<int:pk>/delete/", views.ConfigurationBackupDeleteView.as_view(), name="configurationbackup_delete"),
     path(
@@ -139,6 +140,7 @@ urlpatterns = [
     path("configurations/", views.ConfigurationBackupListView.as_view(), name="configuration_list"),
     path("configurations/add/", views.ConfigurationBackupEditView.as_view(), name="configuration_add"),
     path("configurations/<int:pk>/", views.ConfigurationBackupView.as_view(), name="configuration"),
+    path("configurations/<int:pk>/yaml/", views.ConfigurationBackupYAMLView.as_view(), name="configuration_yaml"),
     path("configurations/<int:pk>/edit/", views.ConfigurationBackupEditView.as_view(), name="configuration_edit"),
     path("configurations/<int:pk>/delete/", views.ConfigurationBackupDeleteView.as_view(), name="configuration_delete"),
     path("configurations/<int:pk>/refresh/", views.ConfigurationBackupRefreshView.as_view(), name="configuration_refresh"),

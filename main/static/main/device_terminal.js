@@ -11,6 +11,7 @@
   const statusBadge = document.getElementById("terminal-status");
 
   let socket = null;
+  let disconnectRequested = false;
 
   function websocketUrl(path) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -75,6 +76,9 @@
       setStatus("Отключено", "bg-secondary");
       input.disabled = true;
       sendButton.disabled = true;
+      if (disconnectRequested && root.dataset.deviceUrl) {
+        window.location.href = root.dataset.deviceUrl;
+      }
     });
 
     socket.addEventListener("error", () => {
@@ -94,9 +98,14 @@
     }
   });
   disconnectButton.addEventListener("click", () => {
+    disconnectRequested = true;
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "disconnect" }));
       socket.close();
+    } else if (socket && socket.readyState === WebSocket.CONNECTING) {
+      socket.close();
+    } else if (root.dataset.deviceUrl) {
+      window.location.href = root.dataset.deviceUrl;
     }
   });
 

@@ -77,3 +77,4 @@ class DeviceTerminalViewTests(TestCase):
             response,
             f"/ws/plugins/config-weaver/devices/{self.profile.pk}/terminal/",
         )
+        self.assertContains(response, f'data-device-url="{self.profile.get_absolute_url()}"')

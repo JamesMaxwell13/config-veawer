@@ -44,7 +44,7 @@ port: 5432
 
 Если база уже создана и права выданы, этот шаг повторять не нужно.
 
-#### 2. Активируйте окружение NetBox
+#### 2. Активировать окружение NetBox
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox
@@ -57,14 +57,14 @@ source venv/bin/activate
 /home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install --upgrade pip
 ```
 
-#### 3. Установите зависимости плагина
+#### 3. Установить зависимости плагина
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox
 /home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install pyyaml netmiko paramiko cryptography channels daphne
 ```
 
-#### 4. Установите плагин в editable-режиме
+#### 4. Установить плагин в editable-режиме
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox
@@ -79,9 +79,9 @@ cd /home/andrew/bsuir/diploma/netbox
 
 В выводе должен быть пакет `netbox-config-weaver`.
 
-#### 5. Настройте NetBox
+#### 5. Настроить NetBox
 
-Откройте файл:
+Открыть файл:
 
 ```text
 /home/andrew/bsuir/diploma/netbox/netbox/netbox/configuration.py
@@ -145,7 +145,7 @@ PLUGINS_CONFIG = {
 Короткий пример только с настройками плагина лежит в `examples/netbox_plugin_configuration.py`.
 Этот файл не загружается автоматически; значения из него нужно перенести в `configuration.py` NetBox.
 
-#### 6. Проверьте конфигурацию Django
+#### 6. Проверить конфигурацию Django
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox/netbox
@@ -179,7 +179,7 @@ cd /home/andrew/bsuir/diploma/netbox/netbox
 No migrations to apply.
 ```
 
-#### 8. Соберите статические файлы
+#### 8. Собрать статические файлы
 
 ```bash
 cd /home/andrew/bsuir/diploma/netbox/netbox
@@ -192,7 +192,7 @@ cd /home/andrew/bsuir/diploma/netbox/netbox
 /home/andrew/bsuir/diploma/netbox/netbox/static
 ```
 
-#### 9. Создайте администратора NetBox
+#### 9. Создать администратора NetBox
 
 Если суперпользователь еще не создан:
 
@@ -201,29 +201,66 @@ cd /home/andrew/bsuir/diploma/netbox/netbox
 /home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py createsuperuser
 ```
 
-#### 10. Запустите NetBox с плагином
+#### 10. Запустить NetBox с плагином
 
-Для локального запуска при `DEBUG = False` используйте `--insecure`, иначе `runserver` не будет раздавать `/static/*` и NetBox покажет ошибку статики.
+Чтобы запустить полный локальный стенд, нужно выполнить:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py runserver 0.0.0.0:8000 --insecure
+cd /home/andrew/bsuir/diploma
+make run
 ```
 
-NetBox будет доступен:
+Эта команда должна запустить три процесса:
+
+- запустить NetBox через ASGI/Daphne на `HOST:PORT`;
+- запустить NetBox RQ worker для очередей `high default low`;
+- запустить цикл планировщика config-weaver, который выполняет `run_due_tasks` каждые `SCHEDULER_INTERVAL` секунд.
+
+По умолчанию нужно открыть:
 
 ```text
 http://127.0.0.1:8000/
 ```
 
-Ручный терминал устройства использует WebSocket, поэтому для него NetBox нужно запускать через ASGI/Daphne:
+Чтобы изменить адрес или порт, нужно передать переменные `make`:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-DJANGO_SETTINGS_MODULE=netbox.settings /home/andrew/bsuir/diploma/netbox/venv/bin/daphne -b 0.0.0.0 -p 8000 main.asgi:application
+make run HOST=127.0.0.1 PORT=8001
 ```
 
-Проверка ответа приложения:
+Чтобы запустить только web-процесс без worker и планировщика, нужно выполнить:
+
+```bash
+make run-web
+```
+
+Чтобы запустить только RQ worker, нужно выполнить:
+
+```bash
+make run-worker
+```
+
+Чтобы запустить только цикл планировщика config-weaver, нужно выполнить:
+
+```bash
+make run-scheduler
+```
+
+Чтобы один раз выполнить просроченные задачи без постоянного цикла, нужно выполнить:
+
+```bash
+make run-due-tasks
+```
+
+Чтобы проверить runtime-зависимости перед запуском, нужно выполнить:
+
+```bash
+make check-runtime
+```
+
+Эта проверка должна подтвердить доступность `daphne`, Redis и подключения Django к PostgreSQL.
+
+Проверить ответ приложения нужно так:
 
 ```bash
 curl -I http://127.0.0.1:8000/
@@ -236,7 +273,7 @@ HTTP/1.1 302 Found
 Location: /login/?next=/
 ```
 
-Проверка статики:
+Проверить статику нужно так:
 
 ```bash
 curl -I http://127.0.0.1:8000/static/netbox.css
@@ -246,36 +283,93 @@ curl -I http://127.0.0.1:8000/static/setmode.js
 
 Все три запроса должны возвращать `200 OK`.
 
-#### 11. Проверьте плагин в интерфейсе
+#### 11. Учесть нюансы WebSocket-терминала
 
-1. Откройте `http://127.0.0.1:8000/`.
-2. Войдите под суперпользователем.
-3. Проверьте, что в меню появился раздел `config-weaver`.
-4. Проверьте страницы `Устройства`, `Конфигурации`, `Планировщик задач` и `Учетные данные`.
+Чтобы пользоваться ручным терминалом устройства, нужно запускать NetBox через ASGI/Daphne, то есть через `make run` или `make run-web`. Обычный Django WSGI `runserver` не обрабатывает WebSocket-маршрут `/ws/plugins/config-weaver/devices/<pk>/terminal/`.
 
-#### 12. Запуск планировщика задач
+Чтобы сохранить NetBox без core-правок, нужно использовать ASGI entrypoint плагина и держать изменения внутри `config-weaver`. Подробности: [RAEDME_NETBOX_CHANGE.md](RAEDME_NETBOX_CHANGE.md).
 
-Ручной запуск всех просроченных задач:
+Если открыть терминал при запуске через WSGI, браузер покажет ошибку WebSocket-соединения, а прямой запрос к `/ws/.../terminal/` обычно вернет `404 Not Found` от `WSGIServer`. Это означает, что запрос попал не в Channels consumer, а в обычный HTTP URL resolver.
+
+Если WebSocket-маршрут обрабатывается Daphne, но пользователь не авторизован, тестовый handshake без cookie должен вернуть `403 Access denied`. Для локальной диагностики это нормальный признак: ASGI routing работает, но нет сессии NetBox.
+
+Чтобы проверить WebSocket routing без браузера, можно выполнить:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py run_due_tasks
+curl -i -N \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  http://127.0.0.1:8000/ws/plugins/config-weaver/devices/1/terminal/
 ```
 
-Для периодического запуска можно добавить cron:
+Ожидаемая диагностика:
+
+- получить `403 Access denied` без cookie авторизованной сессии - ASGI/Daphne и route работают;
+- получить `404 Not Found` от `WSGIServer` - нужно остановить WSGI `runserver` и запустить `make run`;
+- получить ошибку `Connection refused` - нужно проверить, что `make run` слушает нужный порт;
+- получить `400 bad Sec-WebSocket-Key` - нужно проверить корректность тестового заголовка `Sec-WebSocket-Key`.
+
+Для HTTPS-прокси нужно прокидывать WebSocket upgrade-заголовки и использовать `wss://` на стороне браузера. Минимально нужно настроить:
+
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection "upgrade";
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+Статика при локальном Daphne обслуживается через `ASGIStaticFilesHandler` в `main.asgi:application`. В production нужно раздавать `STATIC_ROOT` через nginx или другой HTTP-сервер.
+
+#### 12. Проверить плагин в интерфейсе
+
+1. Открыть `http://127.0.0.1:8000/`.
+2. Войти под суперпользователем.
+3. Проверить, что в меню появился раздел `config-weaver`.
+4. Проверить страницы `Устройства`, `Конфигурации`, `Планировщик задач` и `Учетные данные`.
+5. Открыть страницу профиля устройства и проверить кнопку `Терминал`.
+
+#### 13. Запустить планировщик задач отдельно
+
+Чтобы вручную выполнить все просроченные задачи один раз, нужно выполнить:
+
+```bash
+cd /home/andrew/bsuir/diploma
+make run-due-tasks
+```
+
+Чтобы запустить постоянный локальный цикл планировщика без web-процесса, нужно выполнить:
+
+```bash
+cd /home/andrew/bsuir/diploma
+make run-scheduler
+```
+
+Чтобы изменить интервал цикла, нужно передать `SCHEDULER_INTERVAL`:
+
+```bash
+make run-scheduler SCHEDULER_INTERVAL=30
+```
+
+Для периодического запуска через cron нужно добавить:
 
 ```bash
 * * * * * cd /home/andrew/bsuir/diploma/netbox/netbox && /home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py run_due_tasks >> /tmp/config-weaver.log 2>&1
 ```
 
-#### 13. Production-вариант
+#### 14. Production-вариант
 
-В production не используйте `runserver --insecure`. Нужно:
+В production не нужно использовать `runserver --insecure`. Нужно:
 
 1. Выполнить `collectstatic --noinput`.
-2. Запустить NetBox через gunicorn/uwsgi.
+2. Запустить HTTP-часть NetBox через gunicorn/uwsgi или ASGI-часть через Daphne/Uvicorn, если нужен WebSocket-терминал.
 3. Настроить nginx или другой HTTP-сервер на раздачу `STATIC_ROOT`.
-4. Проксировать динамические запросы в gunicorn/uwsgi.
+4. Проксировать обычные HTTP-запросы в backend NetBox.
+5. Проксировать `/ws/` в ASGI backend с WebSocket upgrade-заголовками.
+6. Запустить отдельный NetBox RQ worker.
+7. Запустить `run_due_tasks` через cron/systemd timer или отдельный service loop.
 
 Пример systemd-сервиса:
 
@@ -296,32 +390,42 @@ ExecStart=/home/andrew/bsuir/diploma/netbox/venv/bin/gunicorn --bind 127.0.0.1:8
 WantedBy=multi-user.target
 ```
 
-#### 14. Частые проблемы запуска
+#### 15. Частые проблемы запуска
 
 Ошибка статики в браузере:
 
-- Убедитесь, что выполнен `collectstatic --noinput`.
-- Для локального `runserver` при `DEBUG = False` используйте `--insecure`.
-- Проверьте `curl -I http://127.0.0.1:8000/static/netbox.css`.
+- Выполнить `collectstatic --noinput`.
+- Для локального запуска использовать `make run` или `make run-web`.
+- Если используется WSGI `runserver` при `DEBUG = False`, запускать его только через `make run-wsgi`, где есть `--insecure`.
+- Проверить `curl -I http://127.0.0.1:8000/static/netbox.css`.
+
+Ошибка WebSocket-соединения в терминале:
+
+- Проверить, что NetBox запущен через `make run` или `make run-web`, а не через `manage.py runserver`.
+- Проверить, что `/ws/plugins/config-weaver/devices/<pk>/terminal/` не возвращает `404` от `WSGIServer`.
+- Проверить, что пользователь авторизован и имеет право `change_deviceplatformprofile`.
+- Проверить, что `DevicePlatformProfile` включен, содержит `management_ip` и связан с активными `DeviceCredential`.
+- Проверить SSH-доступность устройства: `ssh <username>@<management_ip>`.
+- Для reverse proxy проверить upgrade-заголовки WebSocket и совпадение `ws://`/`wss://` с HTTP/HTTPS.
 
 Ошибка подключения к Redis:
 
-- Проверьте `redis-cli ping`.
-- Убедитесь, что Redis слушает `localhost:6379`.
+- Проверить `redis-cli ping`.
+- Убедиться, что Redis слушает `localhost:6379`.
 
 Ошибка подключения к PostgreSQL:
 
-- Проверьте имя базы, пользователя и пароль в `configuration.py`.
-- Убедитесь, что пользователь `netbox` имеет права на базу `netbox`.
+- Проверить имя базы, пользователя и пароль в `configuration.py`.
+- Убедиться, что пользователь `netbox` имеет права на базу `netbox`.
 
 Плагин не появился:
 
-- Проверьте `PLUGINS = ['main']`.
-- Проверьте установку: `python -m pip show netbox-config-weaver`.
-- Выполните `python manage.py check`.
-- Перезапустите NetBox.
+- Проверить `PLUGINS = ['main']`.
+- Проверить установку: `python -m pip show netbox-config-weaver`.
+- Выполнить `python manage.py check`.
+- Перезапустить NetBox.
 
-#### 15. Переменные окружения
+#### 16. Переменные окружения
 
 Для более безопасной конфигурации можно хранить секреты в окружении:
 
@@ -622,13 +726,18 @@ List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile
 ### Runtime scheduler
 
 ```bash
-python manage.py run_due_tasks
+cd /home/andrew/bsuir/diploma
+make run-due-tasks
 ```
 
-The scheduler executes due tasks in a bounded thread pool. By default up to
-8 tasks can run in parallel. NetBox administrators can change the limit in
-`PLUGINS_CONFIG['main']['scheduler_max_workers']`; invalid values fall back to
-8 and values lower than 1 are treated as 1.
+Чтобы запустить постоянный локальный цикл scheduler, нужно выполнить:
+
+```bash
+cd /home/andrew/bsuir/diploma
+make run-scheduler
+```
+
+Планировщик выполняет просроченные задачи в ограниченном thread pool. По умолчанию можно запускать до 8 задач параллельно. Чтобы изменить лимит, нужно задать `PLUGINS_CONFIG['main']['scheduler_max_workers']`; невалидные значения сбрасываются на 8, значения меньше 1 считаются равными 1.
 
 ### Version System
 
@@ -636,13 +745,17 @@ The scheduler executes due tasks in a bounded thread pool. By default up to
 
 - **Автоматическое создание версий**: Каждый раз конфигурация отправляется на устройство или выполняется ручное резервное копирование, автоматически сохраняется новая версия в базе данных и Git.
 
-- **Наименование версий**: Каждая версия отражается автоматически генерируемым именем формата: **YYYY-MM-DD-HH-MM-device_name**
+- **Наименование версий**: Каждая версия получает автоматически генерируемое имя формата: **YYYY-MM-DD-HH-MM-device_name**
   - Пример: `2026-04-28-14-35-switch-core-01`
   - Время генерируется в UTC и сохраняется в JSON файлах Git репозитория
+  - При совпадении имени для одного устройства добавляется суффикс `_1`, `_2`, `_3` и далее.
+  - Если имя приближается к лимиту поля, базовая часть обрезается так, чтобы итоговое имя с суффиксом помещалось в `128` символов.
 
 - **Просмотр версий**: В UI доступна таблица всех версий для текущего устройства с сортировкой по времени создания (новейшие выше).
 
-- **Наглядное сравнение конфигураций**: Выберите две версии для построения unified diff - строки изображены с префиксами `+`, `-`, ` ` и `@@`.
+- **Просмотр YAML**: На странице конкретной конфигурации доступна кнопка `Просмотреть YAML`. Она открывает YAML-представление версии с метаданными и многострочным `config`.
+
+- **Наглядное сравнение конфигураций**: Чтобы построить unified diff, нужно выбрать две версии; строки отображаются с префиксами `+`, `-`, ` ` и `@@`.
 
 - **Подтверждение на исполнение**: Процесс на исполнение задач в UI требует утверждение через чекбокс `confirm_create_version`.
 
@@ -670,24 +783,49 @@ GET /api/plugins/main/configurations/compare/?from=1&to=2
 
 #### Плагин не появляется в меню NetBox
 
-1. Проверьте, что `main` добавлен в список `PLUGINS` в `configuration.py`
-2. Выполните миграции: `python manage.py migrate main`
-3. Перезагрузите NetBox: `systemctl restart netbox` или перезапустите `runserver`
-4. Проверьте логи: `journalctl -u netbox -n 50`
+1. Проверить, что `main` добавлен в список `PLUGINS` в `configuration.py`.
+2. Выполнить миграции: `python manage.py migrate main`.
+3. Перезапустить NetBox через `make run` или production service.
+4. Проверить логи: `journalctl -u netbox -n 50`.
 
 #### Ошибка при подключении к устройству
 
-- **Connection refused**: Проверьте IP адрес и SSH порт в `DevicePlatformProfile`
-- **Authentication failed**: Проверьте учетные данные в `DeviceCredential`
-- **Timeout**: Увеличьте `timeout` в credential или проверьте сетевую доступность
+- **Connection refused**: проверить IP-адрес и SSH-порт в `DevicePlatformProfile`.
+- **Authentication failed**: проверить учетные данные в `DeviceCredential`.
+- **Timeout**: увеличить `timeout` в credential или проверить сетевую доступность.
+
+#### Ошибка WebSocket-соединения в терминале
+
+Чтобы терминал работал, нужно запускать web-процесс через ASGI/Daphne. Для локального стенда нужно использовать:
+
+```bash
+cd /home/andrew/bsuir/diploma
+make run
+```
+
+или, если нужен только web-процесс:
+
+```bash
+make run-web
+```
+
+Диагностировать нужно так:
+
+1. Проверить, что процесс на `8000` - Daphne, а не `WSGIServer`.
+2. Проверить, что прямой WebSocket handshake на `/ws/plugins/config-weaver/devices/<pk>/terminal/` без cookie возвращает `403 Access denied`, а не `404 Not Found`.
+3. Проверить авторизацию пользователя в NetBox и право `change_deviceplatformprofile`.
+4. Проверить `management_ip`, `ssh_port`, `username`, пароль и активность credential.
+5. При reverse proxy проверить `Upgrade` и `Connection` headers.
+
+Важно: `manage.py runserver` обслуживает только WSGI/HTTP и не должен использоваться для терминала. При `runserver` UI может открыться, но WebSocket будет падать.
 
 #### Git репозиторий не инициализируется
 
-Убедитесь, что директория настроена правильно и у пользователя есть права на запись:
+Убедиться, что директория настроена правильно и у пользователя есть права на запись:
 
 ```bash
 # Если директория не существует, она создастся автоматически
-# Проверьте права доступа
+# Проверить права доступа
 mkdir -p /home/andrew/bsuir/diploma/config-weaver-vcs
 chmod 755 /home/andrew/bsuir/diploma/config-weaver-vcs
 ```
@@ -698,16 +836,16 @@ chmod 755 /home/andrew/bsuir/diploma/config-weaver-vcs
 ConfigValidationError: YAML parsing error...
 ```
 
-1. Проверьте синтаксис YAML в план текста (используйте валидатор)
-2. Убедитесь, что структура соответствует ожидаемому формату
-3. Проверьте кодировку файла (должно быть UTF-8)
+1. Проверить синтаксис YAML в тексте плана.
+2. Убедиться, что структура соответствует ожидаемому формату.
+3. Проверить кодировку файла: должна быть `UTF-8`.
 
 #### Задачи не запускаются по расписанию
 
-1. Проверьте, что cron или systemd timer настроены правильно
-2. Убедитесь, что время сервера синхронизировано (NTP)
-3. Проверьте статус задач в UI: версия в статус `PENDING` должна иметь время в прошлом
-4. Проверьте логи: `journalctl -u config-weaver-tasks.timer`
+1. Проверить, что запущен `make run`, `make run-scheduler`, cron или systemd timer.
+2. Убедиться, что время сервера синхронизировано через NTP.
+3. Проверить статус задач в UI: задача в статусе `PENDING` должна иметь время в прошлом.
+4. Проверить логи: `journalctl -u config-weaver-tasks.timer`.
 
 #### Высокое использование памяти
 
@@ -723,7 +861,7 @@ CACHES = {
 }
 ```
 
-Или используйте Redis:
+Или использовать Redis:
 
 ```python
 CACHES = {

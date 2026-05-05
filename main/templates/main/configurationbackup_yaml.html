@@ -1,0 +1,15 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}YAML конфигурации {{ object }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>YAML конфигурации {{ object }}</span>
+    <a class="btn btn-sm btn-secondary" href="{{ object.get_absolute_url }}">Назад</a>
+  </div>
+  <div class="card-body">
+    <pre class="mb-0"><code>{{ yaml_text }}</code></pre>
+  </div>
+</div>
+{% endblock %}

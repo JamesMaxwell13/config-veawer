@@ -9,6 +9,7 @@ from django.views import View
 from django.views.generic import FormView, TemplateView
 from netbox.views import generic
 from utilities.views import ObjectPermissionRequiredMixin
+import yaml
 
 from . import filtersets, forms, tables
 from ..application.backups import ConfigurationService
@@ -27,6 +28,18 @@ from ..models import (
     ScheduledTask,
     UMLConfiguration,
 )
+
+
+class _ConfigurationYAMLDumper(yaml.SafeDumper):
+    pass
+
+
+def _represent_multiline_string(dumper, value):
+    style = "|" if "\n" in value else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_ConfigurationYAMLDumper.add_representer(str, _represent_multiline_string)
 
 
 class DeviceCredentialListView(generic.ObjectListView):
@@ -270,6 +283,38 @@ class ConfigurationBackupListView(generic.ObjectListView):
 
 class ConfigurationBackupView(generic.ObjectView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
+
+
+class ConfigurationBackupYAMLView(ObjectPermissionRequiredMixin, TemplateView):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+    template_name = "main/configurationbackup_yaml.html"
+
+    def get_required_permission(self):
+        return "main.view_configurationbackup"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        backup = get_object_or_404(self.queryset, pk=kwargs["pk"])
+        payload = {
+            "device": backup.device.name,
+            "version": backup.version,
+            "version_name": backup.version_name,
+            "created": backup.created.isoformat() if backup.created else None,
+            "source": backup.source,
+            "commit_hash": backup.commit_hash,
+            "config_checksum": backup.config_checksum,
+            "redacted": backup.redacted,
+            "config": backup.config_text,
+        }
+        context["object"] = backup
+        context["yaml_text"] = yaml.dump(
+            payload,
+            Dumper=_ConfigurationYAMLDumper,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+        return context
 
 
 class ConfigurationBackupEditView(generic.ObjectEditView):

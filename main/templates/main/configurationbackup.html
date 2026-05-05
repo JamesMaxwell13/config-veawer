@@ -5,6 +5,9 @@
   <a class="btn btn-info ms-1" href="{% url 'plugins:main:configuration_versions' device_id=object.device.pk %}">
     <i class="mdi mdi-format-list-bulleted"></i> Версии устройства
   </a>
+  <a class="btn btn-info ms-1" href="{% url 'plugins:main:configurationbackup_yaml' pk=object.pk %}">
+    <i class="mdi mdi-code-json"></i> Просмотреть YAML
+  </a>
   <form method="post" action="{% url 'plugins:main:configurationbackup_refresh' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">

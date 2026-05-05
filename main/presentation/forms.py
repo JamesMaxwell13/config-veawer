@@ -29,7 +29,7 @@ class DeviceCredentialForm(NetBoxModelForm):
             self.fields["password"].required = False
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = super().clean() or self.cleaned_data
         if self.instance and self.instance.pk and not cleaned.get("password"):
             cleaned["password"] = self.instance.password
         if self.instance and self.instance.pk and not cleaned.get("enable_secret"):
@@ -159,7 +159,7 @@ class ConfigurationBackupForm(NetBoxModelForm):
         self.fields["source"].initial = self.fields["source"].initial or "manual"
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = super().clean() or self.cleaned_data
         device = cleaned.get("device")
         if device and not cleaned.get("version"):
             latest = ConfigurationBackup.objects.filter(device=device).order_by("-version").first()
@@ -176,7 +176,10 @@ class ConfigurationBackupForm(NetBoxModelForm):
         if not instance.version_name:
             from ..infrastructure.vcs import ConfigurationVCS
 
-            instance.version_name = ConfigurationVCS.build_version_name(instance.device)
+            instance.version_name = ConfigurationVCS.build_unique_version_name(
+                instance.device,
+                exclude_pk=instance.pk,
+            )
         if kwargs.get("commit", True):
             instance.save()
             self.save_m2m()

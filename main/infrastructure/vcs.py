@@ -60,6 +60,32 @@ class ConfigurationVCS:
         return f"{dt:%Y-%m-%d-%H-%M}-{safe_name}"
 
     @classmethod
+    def build_unique_version_name(
+        cls,
+        device: Device,
+        dt: datetime | None = None,
+        exclude_pk: int | None = None,
+    ) -> str:
+        max_length = ConfigurationBackup._meta.get_field("version_name").max_length
+        base_name = cls.build_version_name(device, dt)
+        existing_qs = ConfigurationBackup.objects.filter(device=device)
+        if exclude_pk:
+            existing_qs = existing_qs.exclude(pk=exclude_pk)
+        existing_names = set(existing_qs.values_list("version_name", flat=True))
+
+        candidate = base_name[:max_length]
+        if candidate not in existing_names:
+            return candidate
+
+        suffix_number = 1
+        while True:
+            suffix = f"_{suffix_number}"
+            candidate = f"{base_name[:max_length - len(suffix)]}{suffix}"
+            if candidate not in existing_names:
+                return candidate
+            suffix_number += 1
+
+    @classmethod
     def write_backup(
         cls,
         device: Device,
@@ -73,7 +99,7 @@ class ConfigurationVCS:
         file_name = f"{safe_name}__v{version}.json"
 
         redacted = redact_secrets(config_text)
-        version_name = cls.build_version_name(device)
+        version_name = cls.build_unique_version_name(device)
         payload = {
             "device": device.name,
             "version": version,

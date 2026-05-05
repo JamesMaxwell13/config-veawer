@@ -33,13 +33,18 @@ class NetworkTaskTable(NetBoxTable):
 
 class ConfigurationBackupTable(NetBoxTable):
     task = tables.Column(empty_values=(), verbose_name="Сценарий")
+    details = TemplateColumn(
+        template_code='<a class="btn btn-sm btn-primary" href="{{ record.get_absolute_url }}">Открыть</a>',
+        verbose_name="Конфиг",
+        orderable=False,
+    )
 
     def render_task(self, value, record):
         return value or "-"
 
     class Meta(NetBoxTable.Meta):
         model = ConfigurationBackup
-        fields = ("device", "version", "version_name", "source", "commit_hash", "config_checksum", "created")
+        fields = ("device", "version", "version_name", "source", "commit_hash", "config_checksum", "created", "details")
 
 
 class DevicePlatformProfileTable(NetBoxTable):
