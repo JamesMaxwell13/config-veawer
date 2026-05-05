@@ -36,7 +36,6 @@ config_weaver_repo/
 media/
 reports/
 scripts/
-static/
 *.sqlite3
 *.db
 
