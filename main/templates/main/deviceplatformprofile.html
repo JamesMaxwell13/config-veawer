@@ -22,6 +22,33 @@
   <div class="row mt-3">
     <div class="col col-md-6">
       <div class="card">
+        <h5 class="card-header">Профиль устройства</h5>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Устройство NetBox</dt>
+            <dd class="col-sm-7"><a href="{% url 'dcim:device' pk=object.device.pk %}">{{ object.device }}</a></dd>
+            <dt class="col-sm-5">Учетные данные</dt>
+            <dd class="col-sm-7"><a href="{{ object.credential.get_absolute_url }}">{{ object.credential }}</a></dd>
+            <dt class="col-sm-5">Вендор</dt>
+            <dd class="col-sm-7">{{ object.get_vendor_display }}</dd>
+            <dt class="col-sm-5">Платформа</dt>
+            <dd class="col-sm-7">{{ object.get_platform_display }}</dd>
+            <dt class="col-sm-5">Management IP</dt>
+            <dd class="col-sm-7">{{ object.management_ip|default:"-" }}</dd>
+            <dt class="col-sm-5">Command timeout</dt>
+            <dd class="col-sm-7">{{ object.command_timeout }}</dd>
+            <dt class="col-sm-5">Включен</dt>
+            <dd class="col-sm-7">{{ object.enabled|yesno:"Да,Нет" }}</dd>
+            <dt class="col-sm-5">Создан</dt>
+            <dd class="col-sm-7">{{ object.created }}</dd>
+            <dt class="col-sm-5">Обновлен</dt>
+            <dd class="col-sm-7">{{ object.last_updated }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col col-md-6">
+      <div class="card">
         <h5 class="card-header">Доступные команды</h5>
         <div class="card-body">
           <dl class="row mb-3">
@@ -33,32 +60,6 @@
           <a class="btn btn-primary" href="{{ command_template_url }}">
             <i class="mdi mdi-format-list-bulleted"></i> Открыть команды
           </a>
-        </div>
-      </div>
-    </div>
-    <div class="col col-md-6">
-      <div class="card">
-        <h5 class="card-header">Последние конфигурации</h5>
-        <div class="card-body">
-          <table class="table table-hover">
-            <thead>
-              <tr><th>Версия</th><th>Дата</th><th>Источник</th><th></th></tr>
-            </thead>
-            <tbody>
-              {% for configuration in configurations %}
-                <tr>
-                  <td>v{{ configuration.version }}</td>
-                  <td>{{ configuration.created }}</td>
-                  <td>{{ configuration.source }}</td>
-                  <td>
-                    <a href="{{ configuration.get_absolute_url }}" class="btn btn-sm btn-primary">Открыть</a>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td colspan="4" class="text-muted">Конфигураций пока нет.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

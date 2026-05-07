@@ -64,6 +64,23 @@ class CryptoAndModelTests(TestCase):
         self.assertEqual(form.cleaned_data["password"], cred.password)
         self.assertEqual(form.cleaned_data["enable_secret"], cred.enable_secret)
 
+    def test_device_credential_list_has_reveal_password_action(self):
+        user = User.objects.create_superuser(username="admin", password="netbox-pass")
+        cred = DeviceCredential.objects.create(
+            name="cred1",
+            username="device-admin",
+            password="plain-pass",
+        )
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("plugins:main:devicecredential_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk}))
+        self.assertContains(response, "Показать пароль")
+        self.assertContains(response, "btn-danger")
+        self.assertNotContains(response, "plain-pass")
+
     def test_reveal_credential_requires_netbox_username_and_password(self):
         user = User.objects.create_superuser(username="admin", password="netbox-pass")
         cred = DeviceCredential.objects.create(
@@ -83,6 +100,10 @@ class CryptoAndModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "Для просмотра пароля подтвердите")
+        self.assertNotContains(response, "account_username")
+        self.assertNotContains(response, "account_password")
+        self.assertContains(response, "device-admin")
         self.assertContains(response, "plain-pass")
         self.assertContains(response, "plain-enable")
 

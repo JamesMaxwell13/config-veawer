@@ -30,6 +30,12 @@ urlpatterns = [
     path("devices/add/", views.DevicePlatformProfileEditView.as_view(), name="deviceplatformprofile_add"),
     path("devices/<int:pk>/", views.DevicePlatformProfileView.as_view(), name="deviceplatformprofile"),
     path("devices/<int:pk>/cli/", views.DevicePlatformProfileCLIView.as_view(), name="deviceplatformprofile_cli"),
+    path("devices/<int:pk>/versions/", views.DevicePlatformProfileVersionsView.as_view(), name="deviceplatformprofile_versions"),
+    path(
+        "devices/<int:pk>/versions/diff/",
+        views.DevicePlatformProfileVersionDiffView.as_view(),
+        name="deviceplatformprofile_versions_diff",
+    ),
     path(
         "devices/<int:pk>/refresh-config/",
         views.DevicePlatformProfileRefreshConfigView.as_view(),
@@ -90,8 +96,6 @@ urlpatterns = [
         views.ConfigurationBackupRestoreView.as_view(),
         name="configurationbackup_restore",
     ),
-    path("versions/<int:device_id>/", views.ConfigurationVersionListView.as_view(), name="configuration_versions"),
-    path("versions/<int:device_id>/diff/", views.ConfigurationVersionDiffView.as_view(), name="configuration_diff"),
     path(
         "configurations/<int:pk>/changelog/",
         ObjectChangeLogView.as_view(),
@@ -132,6 +136,7 @@ urlpatterns = [
     path("devices/add/", views.DevicePlatformProfileEditView.as_view(), name="device_add"),
     path("devices/<int:pk>/", views.DevicePlatformProfileView.as_view(), name="device"),
     path("devices/<int:pk>/cli/", views.DevicePlatformProfileCLIView.as_view(), name="device_cli"),
+    path("devices/<int:pk>/versions/", views.DevicePlatformProfileVersionsView.as_view(), name="device_versions"),
     path("devices/<int:pk>/refresh-config/", views.DevicePlatformProfileRefreshConfigView.as_view(), name="device_refresh_config"),
     path("devices/<int:pk>/terminal/", views.DevicePlatformProfileTerminalView.as_view(), name="device_terminal"),
     path("devices/<int:pk>/edit/", views.DevicePlatformProfileEditView.as_view(), name="device_edit"),

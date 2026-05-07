@@ -22,4 +22,9 @@ class DeviceConfigWeaverButtons(PluginTemplateExtension):
         )
 
 
-template_extensions = [DeviceConfigWeaverButtons]
+class ConfigWeaverAssets(PluginTemplateExtension):
+    def head(self):
+        return self.render("main/inc/yaml_highlight_assets.html")
+
+
+template_extensions = [ConfigWeaverAssets, DeviceConfigWeaverButtons]

@@ -2,6 +2,7 @@ from django.contrib import messages
 from dcim.models import Device
 from django.contrib.auth import update_session_auth_hash
 from django.conf import settings
+from django.utils.html import conditional_escape
 from django.shortcuts import get_object_or_404, redirect
 from django.http import HttpResponseBadRequest
 from django.urls import reverse
@@ -83,6 +84,7 @@ class DeviceCredentialRevealView(FormView):
             return self.form_invalid(form)
         update_session_auth_hash(self.request, self.request.user)
         context = self.get_context_data(form=form)
+        context["reveal_success"] = True
         context["revealed_password"] = self.credential.password_plain
         context["revealed_enable_secret"] = self.credential.enable_secret_plain
         return self.render_to_response(context)
@@ -113,9 +115,29 @@ class DevicePlatformProfileView(generic.ObjectView):
             + urlencode({"vendor": instance.vendor, "platform": instance.platform})
         )
         return {
-            "configurations": ConfigurationBackup.objects.filter(device=instance.device).order_by("-created")[:10],
             "scheduled_tasks": ScheduledTask.objects.filter(target_device=instance.device).order_by("-schedule_time")[:10],
             "command_template_url": command_template_url,
+        }
+
+
+@register_model_view(DevicePlatformProfile, "versions", path="versions")
+class DevicePlatformProfileVersionsView(generic.ObjectView):
+    queryset = DevicePlatformProfile.objects.select_related("device", "credential")
+    template_name = "main/configuration_versions.html"
+    tab = ViewTab(
+        label="Версии конфигураций",
+        badge=lambda obj: ConfigurationBackup.objects.filter(device=obj.device).count(),
+        weight=500,
+    )
+    actions = ()
+
+    def get_extra_context(self, request, instance):
+        versions = ConfigurationBackup.objects.filter(device=instance.device).order_by("-version")
+        return {
+            "device": instance.device,
+            "versions": versions,
+            "current_version": versions.first(),
+            "diff_url": reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": instance.pk}),
         }
 
 
@@ -301,7 +323,10 @@ class ConfigurationBackupView(generic.ObjectView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
 
     def get_extra_context(self, request, instance):
-        return {"yaml_text": configuration_backup_to_yaml(instance)}
+        return {
+            "yaml_text": configuration_backup_to_yaml(instance),
+            "profile": DevicePlatformProfile.objects.filter(device=instance.device).first(),
+        }
 
 
 class ConfigurationBackupYAMLView(ObjectPermissionRequiredMixin, TemplateView):
@@ -422,39 +447,39 @@ class ConfigurationBackupRefreshView(ObjectPermissionRequiredMixin, View):
         return redirect(backup.get_absolute_url())
 
 
-class ConfigurationVersionListView(TemplateView):
-    template_name = "main/configuration_versions.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        device = get_object_or_404(Device, pk=kwargs["device_id"])
-        versions = ConfigurationBackup.objects.filter(device=device).order_by("-version")
-        context["device"] = device
-        context["versions"] = versions
-        context["current_version"] = versions.first()
-        return context
-
-
-class ConfigurationVersionDiffView(TemplateView):
+class DevicePlatformProfileVersionDiffView(TemplateView):
     template_name = "main/configuration_diff.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        device = get_object_or_404(Device, pk=kwargs["device_id"])
+        profile = get_object_or_404(DevicePlatformProfile.objects.select_related("device"), pk=kwargs["pk"])
+        device = profile.device
         v_from = self.request.GET.get("from")
         v_to = self.request.GET.get("to")
+        context["device"] = device
+        context["profile"] = profile
         if not v_from or not v_to:
             context["error"] = "Set query params: from and to"
             context["diff"] = []
-            context["device"] = device
             return context
         b_from = get_object_or_404(ConfigurationBackup, device=device, version=int(v_from))
         b_to = get_object_or_404(ConfigurationBackup, device=device, version=int(v_to))
-        context["device"] = device
         context["from_backup"] = b_from
         context["to_backup"] = b_to
-        context["diff"] = ConfigurationService.compare_versions(b_from.config_text, b_to.config_text)
+        context["diff"] = [
+            _format_diff_line(line)
+            for line in ConfigurationService.compare_versions(b_from.config_text, b_to.config_text)
+        ]
         return context
+
+
+def _format_diff_line(line):
+    css_class = ""
+    if line.startswith("+") and not line.startswith("+++"):
+        css_class = "text-success"
+    elif line.startswith("-") and not line.startswith("---"):
+        css_class = "text-danger"
+    return {"text": conditional_escape(line), "class": css_class}
 
 
 class ScheduledTaskListView(generic.ObjectListView):

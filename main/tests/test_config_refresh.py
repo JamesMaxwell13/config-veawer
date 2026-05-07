@@ -7,6 +7,7 @@ from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.urls import reverse
+from django.urls.exceptions import NoReverseMatch
 from users.models import User
 
 from main.application.backups import ConfigurationService
@@ -96,6 +97,7 @@ class ConfigurationRefreshTests(TestCase):
             version=1,
             config_text="hostname refresh-sw1",
             source="runtime",
+            commit_hash="abcdef1234567890",
             config_checksum="checksum",
         )
 
@@ -107,6 +109,15 @@ class ConfigurationRefreshTests(TestCase):
             reverse("plugins:main:configurationbackup_refresh", kwargs={"pk": backup.pk}),
         )
         self.assertContains(response, "Проверить конфигурацию")
+        self.assertContains(
+            response,
+            reverse("plugins:main:deviceplatformprofile_versions", kwargs={"pk": self.profile.pk}),
+        )
+        self.assertContains(response, 'title="abcdef1234567890"')
+        self.assertContains(response, ">abcdef123456</code>")
+        self.assertContains(response, 'title="checksum"')
+        self.assertContains(response, "btn-success")
+        self.assertNotContains(response, "btn-warning")
 
     def test_configuration_page_renders_yaml_inline(self):
         backup = ConfigurationBackup.objects.create(
@@ -174,8 +185,19 @@ class ConfigurationRefreshTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Доступные команды")
+        self.assertContains(response, "Профиль устройства")
         self.assertNotContains(response, "CLI устройства")
-        self.assertContains(response, "Последние конфигурации")
+        self.assertNotContains(response, "Последние конфигурации")
+        self.assertContains(response, self.device.name)
+        self.assertContains(response, self.credential.name)
+        self.assertContains(response, "Cisco")
+        self.assertContains(response, "Cisco IOS")
+        self.assertContains(response, "192.0.2.20")
+        self.assertContains(response, "60")
+        self.assertContains(
+            response,
+            reverse("plugins:main:deviceplatformprofile_versions", kwargs={"pk": self.profile.pk}),
+        )
 
     def test_device_configurations_page_has_get_config_button(self):
         response = self.client.get(reverse("dcim:device_configurations", kwargs={"pk": self.device.pk}))
@@ -226,10 +248,15 @@ class ConfigurationRefreshTests(TestCase):
             reverse("plugins:main:configurationbackup_restore", kwargs={"pk": previous.pk}),
         )
         self.assertContains(response, "Отправить на устройство")
+        self.assertContains(response, "btn-success")
         self.assertNotContains(response, "CLI устройства")
         self.assertNotContains(response, "Ближайшие задачи планировщика")
 
-    def test_configuration_versions_page_marks_current_and_can_send_previous(self):
+    def test_legacy_configuration_versions_url_is_removed(self):
+        with self.assertRaises(NoReverseMatch):
+            reverse("plugins:main:configuration_versions", kwargs={"device_id": self.device.pk})
+
+    def test_configuration_versions_tab_marks_current_and_can_send_previous(self):
         current = ConfigurationBackup.objects.create(
             device=self.device,
             version=2,
@@ -247,11 +274,22 @@ class ConfigurationRefreshTests(TestCase):
             config_checksum="previous-checksum",
         )
 
-        response = self.client.get(reverse("plugins:main:configuration_versions", kwargs={"device_id": self.device.pk}))
+        response = self.client.get(reverse("plugins:main:deviceplatformprofile_versions", kwargs={"pk": self.profile.pk}))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Версии конфигураций")
+        self.assertContains(response, "configuration-compare-form")
+        self.assertContains(response, 'type="checkbox" value=', count=2)
+        self.assertContains(
+            response,
+            reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": self.profile.pk}),
+        )
         self.assertContains(response, "Текущая")
-        self.assertContains(response, "Отправить на устройство", count=1)
+        self.assertContains(response, "Отправить", count=1)
+        self.assertContains(response, "btn-success")
+        self.assertNotContains(response, "Отправить на устройство")
+        self.assertContains(response, 'title="previous-checksum"')
+        self.assertContains(response, ">previous-che</code>")
         self.assertContains(
             response,
             reverse("plugins:main:configurationbackup_restore", kwargs={"pk": previous.pk}),
@@ -260,6 +298,33 @@ class ConfigurationRefreshTests(TestCase):
             response,
             reverse("plugins:main:configurationbackup_restore", kwargs={"pk": current.pk}),
         )
+
+    def test_configuration_diff_page_highlights_added_and_removed_lines(self):
+        ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            version_name="before",
+            config_text="hostname old\ninterface Ethernet0/0\n description old",
+            source="runtime",
+        )
+        ConfigurationBackup.objects.create(
+            device=self.device,
+            version=2,
+            version_name="after",
+            config_text="hostname new\ninterface Ethernet0/0\n description new",
+            source="runtime",
+        )
+
+        response = self.client.get(
+            reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": self.profile.pk}),
+            {"from": 1, "to": 2},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '<span class="text-danger">-hostname old</span>')
+        self.assertContains(response, '<span class="text-success">+hostname new</span>')
+        self.assertContains(response, "<span>---")
+        self.assertContains(response, "<span>+++")
 
     def test_restore_yaml_configuration_generates_commands_and_creates_new_version(self):
         backup = ConfigurationBackup.objects.create(
@@ -335,6 +400,80 @@ class ConfigurationRefreshTests(TestCase):
 
         self.assertEqual(commands[-1], "write memory")
         self.assertIn("hostname preview-hostname", commands)
+
+    def test_scheduled_task_list_truncates_yaml_and_links_to_profile(self):
+        task_yaml = (
+            "operations:\n"
+            "  - name: hostname\n"
+            "    operation_type: custom\n"
+            "    params:\n"
+            "      hostname: very-long-hostname-for-table-preview\n"
+            "raw_commands:\n"
+            "  - interface Ethernet0/0\n"
+            "  - description very long description for the scheduled task table\n"
+        )
+        scheduled_task = ScheduledTask.objects.create(
+            task_name="long-yaml-task",
+            task_type=ScheduledTask.TYPE_APPLY_SCENARIO,
+            target_device=self.device,
+            task=task_yaml,
+            schedule_time=timezone.now(),
+        )
+
+        response = self.client.get(reverse("plugins:main:scheduledtask_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, scheduled_task.get_absolute_url())
+        self.assertContains(response, ">long-yaml-task</a>")
+        self.assertContains(response, '<code title="operations:')
+        self.assertContains(response, "...")
+        self.assertNotContains(response, "description very long description for the scheduled task table</code>")
+
+    def test_scheduled_task_profile_shows_full_task_information(self):
+        task_yaml = (
+            "operations:\n"
+            "  - name: hostname\n"
+            "    operation_type: custom\n"
+            "    params:\n"
+            "      hostname: profile-hostname\n"
+        )
+        scheduled_task = ScheduledTask.objects.create(
+            task_name="profile-yaml-task",
+            task_type=ScheduledTask.TYPE_APPLY_SCENARIO,
+            target_device=self.device,
+            task=task_yaml,
+            schedule_time=timezone.now(),
+            run_every_seconds=300,
+            max_retries=2,
+            retry_count=1,
+            status=ScheduledTask.STATUS_FAILED,
+            result_message="last run failed",
+        )
+
+        response = self.client.get(scheduled_task.get_absolute_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Профиль задачи")
+        self.assertContains(response, "profile-yaml-task")
+        self.assertContains(response, "Применить сценарий")
+        self.assertContains(response, self.device.name)
+        self.assertContains(response, "Failed")
+        self.assertContains(response, "300")
+        self.assertContains(response, "2")
+        self.assertContains(response, "1")
+        self.assertContains(response, "last run failed")
+        self.assertContains(response, '<div class="mb-0 text-body" style="white-space: pre-wrap;">last run failed</div>')
+        self.assertNotContains(response, "<pre class=\"mb-0 text-wrap\"><code>last run failed</code></pre>")
+        self.assertContains(response, "YAML задачи")
+        self.assertContains(response, '<pre class="mb-0"><code>operations:')
+        self.assertContains(response, "hostname: profile-hostname")
+        self.assertContains(response, "Просмотр команд")
+        self.assertContains(response, "Создать версию")
+        self.assertContains(response, "Запустить")
+        self.assertNotContains(response, "Preview Commands")
+        self.assertNotContains(response, "Run Now")
+        self.assertContains(response, 'type="checkbox" name="confirm_create_version"')
+        self.assertNotContains(response, "Create version")
 
     def test_generated_version_names_are_unique_for_same_base_name(self):
         fixed_dt = datetime(2026, 5, 5, 20, 45, tzinfo=timezone.get_current_timezone())

@@ -20,6 +20,14 @@ from ..models import (
 )
 
 
+YAML_EDITOR_ATTRS = {
+    "class": "font-monospace yaml-editor",
+    "data-yaml-editor": "true",
+    "spellcheck": "false",
+    "wrap": "off",
+}
+
+
 class DeviceCredentialForm(NetBoxModelForm):
     password = forms.CharField(widget=forms.PasswordInput(render_value=False))
     enable_secret = forms.CharField(required=False, widget=forms.PasswordInput(render_value=False))
@@ -126,7 +134,7 @@ class CommandTemplatePreviewForm(forms.Form):
             "YAML или JSON mapping с параметрами, "
             "например: interface: GigabitEthernet0/1"
         ),
-        widget=forms.Textarea(attrs={"rows": 8}),
+        widget=forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 8}),
     )
 
     def clean_params(self):
@@ -151,6 +159,9 @@ class NetworkTaskForm(NetBoxModelForm):
     class Meta:
         model = NetworkTask
         fields = ("name", "description", "device_task", "plan_yaml", "enabled", "tags")
+        widgets = {
+            "plan_yaml": forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 18}),
+        }
 
 
 class ConfigurationBackupForm(NetBoxModelForm):
@@ -197,6 +208,9 @@ class ConfigurationBackupForm(NetBoxModelForm):
     class Meta:
         model = ConfigurationBackup
         fields = ("device", "task", "version", "version_name", "config_text", "source", "tags")
+        widgets = {
+            "config_text": forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 24}),
+        }
 
 
 class ScheduledTaskForm(NetBoxModelForm):
@@ -216,6 +230,9 @@ class ScheduledTaskForm(NetBoxModelForm):
             "result_message",
             "tags",
         )
+        widgets = {
+            "task": forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 14}),
+        }
 
 
 class UMLConfigurationForm(NetBoxModelForm):

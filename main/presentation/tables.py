@@ -15,6 +15,17 @@ from ..models import (
 
 
 class DeviceCredentialTable(NetBoxTable):
+    actions = ActionsColumn(
+        extra_buttons="""
+            <a class="btn btn-sm btn-danger"
+               href="{% url 'plugins:main:devicecredential_reveal' pk=record.pk %}"
+               title="Показать пароль"
+               aria-label="Показать пароль">
+              <i class="mdi mdi-lock-open-variant"></i>
+            </a>
+        """
+    )
+
     class Meta(NetBoxTable.Meta):
         model = DeviceCredential
         fields = ("name", "username", "ssh_port", "timeout", "use_enable", "created", "last_updated")
@@ -88,6 +99,20 @@ class DevicePlatformProfileTable(NetBoxTable):
 
 
 class ScheduledTaskTable(NetBoxTable):
+    task_name = tables.Column(verbose_name="Название")
+    task = tables.Column(verbose_name="Таск (YAML)")
+
+    def render_task_name(self, value, record):
+        return format_html('<a href="{}">{}</a>', record.get_absolute_url(), value)
+
+    def render_task(self, value):
+        if not value:
+            return "-"
+        compact = " ".join(value.split())
+        if len(compact) > 100:
+            compact = compact[:100] + "..."
+        return format_html("<code title=\"{}\">{}</code>", value, compact)
+
     class Meta(NetBoxTable.Meta):
         model = ScheduledTask
         fields = (

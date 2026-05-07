@@ -1,19 +1,38 @@
-{% extends 'base/layout.html' %}
+{% extends 'generic/object.html' %}
 
 {% block title %}Конфигурации устройства{% endblock %}
 
 {% block content %}
-<div class="card">
+<div class="card mt-3">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>Конфигурации устройства {{ device.name }}</span>
-    <a class="btn btn-sm btn-secondary" href="{% url 'dcim:device' pk=device.pk %}">Устройство NetBox</a>
+    <div class="btn-list justify-content-end">
+      <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=object.pk %}" class="d-inline-block">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-info">
+          <i class="mdi mdi-refresh"></i> Получить конфигурацию
+        </button>
+      </form>
+      <a class="btn btn-sm btn-secondary" href="{% url 'dcim:device' pk=device.pk %}">Устройство NetBox</a>
+    </div>
   </div>
   <div class="card-body">
+    <form id="configuration-compare-form" method="get" action="{{ diff_url }}" class="mb-3">
+      <input type="hidden" name="from" id="configuration-compare-from">
+      <input type="hidden" name="to" id="configuration-compare-to">
+      <button type="submit" id="configuration-compare-button" class="btn btn-primary d-none" disabled>
+        Сравнить
+      </button>
+    </form>
+
     <table class="table table-hover">
-      <thead><tr><th>Версия</th><th>Название</th><th>Дата</th><th>Checksum</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Версия</th><th>Название</th><th>Дата</th><th>Checksum</th><th></th></tr></thead>
       <tbody>
       {% for v in versions %}
         <tr>
+          <td>
+            <input class="form-check-input configuration-version-checkbox" type="checkbox" value="{{ v.version }}" aria-label="Выбрать v{{ v.version }} для сравнения">
+          </td>
           <td>
             v{{ v.version }}
             {% if current_version and v.pk == current_version.pk %}
@@ -22,30 +41,64 @@
           </td>
           <td>{{ v.version_name|default:'-' }}</td>
           <td>{{ v.created }}</td>
-          <td><code>{{ v.config_checksum|default:'-' }}</code></td>
-          <td class="text-end">
-            <a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Открыть</a>
-            {% if not current_version or v.pk != current_version.pk %}
-              <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=v.pk %}" class="d-inline-block ms-1">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-warning">
-                  <i class="mdi mdi-backup-restore"></i> Отправить на устройство
-                </button>
-              </form>
+          <td>
+            {% if v.config_checksum %}
+              <code title="{{ v.config_checksum }}">{{ v.config_checksum|slice:":12" }}</code>
+            {% else %}
+              <span class="text-muted">-</span>
             {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="btn-list justify-content-end flex-nowrap">
+              {% if not current_version or v.pk != current_version.pk %}
+                <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=v.pk %}" class="d-inline-block">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-success">
+                    <i class="mdi mdi-backup-restore"></i> Отправить
+                  </button>
+                </form>
+              {% endif %}
+              <a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Открыть</a>
+            </div>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="5" class="text-muted">Конфигураций пока нет.</td></tr>
+        <tr><td colspan="6" class="text-muted">Конфигураций пока нет.</td></tr>
       {% endfor %}
       </tbody>
     </table>
-
-    <form method="get" action="{% url 'plugins:main:configuration_diff' device_id=device.pk %}" class="row g-2 mt-2">
-      <div class="col-md-5"><input class="form-control" type="number" name="from" placeholder="Версия от" required></div>
-      <div class="col-md-5"><input class="form-control" type="number" name="to" placeholder="Версия до" required></div>
-      <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Сравнить</button></div>
-    </form>
   </div>
 </div>
+
+<script>
+  (function () {
+    const checkboxes = Array.from(document.querySelectorAll(".configuration-version-checkbox"));
+    const button = document.getElementById("configuration-compare-button");
+    const fromInput = document.getElementById("configuration-compare-from");
+    const toInput = document.getElementById("configuration-compare-to");
+
+    function updateCompareState() {
+      const selected = checkboxes.filter((checkbox) => checkbox.checked);
+      checkboxes.forEach((checkbox) => {
+        checkbox.disabled = selected.length >= 2 && !checkbox.checked;
+      });
+
+      if (selected.length === 2) {
+        const versions = selected.map((checkbox) => parseInt(checkbox.value, 10)).sort((a, b) => a - b);
+        fromInput.value = versions[0];
+        toInput.value = versions[1];
+        button.disabled = false;
+        button.classList.remove("d-none");
+      } else {
+        fromInput.value = "";
+        toInput.value = "";
+        button.disabled = true;
+        button.classList.add("d-none");
+      }
+    }
+
+    checkboxes.forEach((checkbox) => checkbox.addEventListener("change", updateCompareState));
+    updateCompareState();
+  })();
+</script>
 {% endblock %}

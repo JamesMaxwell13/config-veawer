@@ -24,7 +24,7 @@
               {% if current_configuration.version_name %} · {{ current_configuration.version_name }}{% endif %}
               · {{ current_configuration.created }}
             </div>
-            <pre class="mb-0"><code>{{ current_yaml }}</code></pre>
+            <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ current_yaml }}</code></pre>
           {% else %}
             <div class="text-muted">Конфигураций пока нет.</div>
           {% endif %}
@@ -60,7 +60,7 @@
                   <td class="text-end">
                     <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=configuration.pk %}" class="d-inline-block">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-warning">
+                      <button type="submit" class="btn btn-sm btn-success">
                         <i class="mdi mdi-backup-restore"></i> Отправить на устройство
                       </button>
                     </form>
