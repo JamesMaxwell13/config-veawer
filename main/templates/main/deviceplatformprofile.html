@@ -11,7 +11,7 @@
   <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">
-      <i class="mdi mdi-refresh"></i> Получить конфиг
+      <i class="mdi mdi-refresh"></i> Получить конфигурацию
     </button>
   </form>
 {% endblock %}
@@ -22,15 +22,17 @@
   <div class="row mt-3">
     <div class="col col-md-6">
       <div class="card">
-        <h5 class="card-header">CLI устройства</h5>
+        <h5 class="card-header">Доступные команды</h5>
         <div class="card-body">
-          <form id="device-cli-form" method="post" action="{% url 'plugins:main:deviceplatformprofile_cli' pk=object.pk %}">
-            {% csrf_token %}
-            {{ command_form.as_p }}
-            <button type="submit" class="btn btn-primary">
-              <i class="mdi mdi-console-line"></i> Выполнить CLI
-            </button>
-          </form>
+          <dl class="row mb-3">
+            <dt class="col-sm-4">Вендор</dt>
+            <dd class="col-sm-8">{{ object.get_vendor_display }}</dd>
+            <dt class="col-sm-4">Платформа</dt>
+            <dd class="col-sm-8">{{ object.get_platform_display }}</dd>
+          </dl>
+          <a class="btn btn-primary" href="{{ command_template_url }}">
+            <i class="mdi mdi-format-list-bulleted"></i> Открыть команды
+          </a>
         </div>
       </div>
     </div>

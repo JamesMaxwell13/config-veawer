@@ -157,13 +157,14 @@ class Migration(migrations.Migration):
                     "task_type",
                     models.CharField(
                         choices=[
-                            ("apply_scenario", "Apply scenario"),
+                            ("apply_scenario", "Применить сценарий"),
                             ("backup", "Сохранить конфигурацию"),
-                            ("healthcheck", "Health check"),
+                            ("healthcheck", "Проверить подключение"),
                         ],
                         max_length=40,
                     ),
                 ),
+                ("task", models.TextField(blank=True, verbose_name="Таск (YAML)")),
                 ("schedule_time", models.DateTimeField()),
                 (
                     "status",
@@ -186,10 +187,6 @@ class Migration(migrations.Migration):
                 (
                     "target_device",
                     models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="scheduled_tasks", to="dcim.device"),
-                ),
-                (
-                    "task",
-                    models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="scheduled_tasks", to="main.networktask"),
                 ),
             ],
             options={"ordering": ("schedule_time",)},

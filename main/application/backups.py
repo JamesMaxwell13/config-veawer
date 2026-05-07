@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import hashlib
-
+from .configuration_yaml import ConfigurationYamlService
 from ..domain.security import redact_secrets
 from ..infrastructure.network import connect_device_cli
 from ..infrastructure.repositories import ConfigurationRepository
@@ -31,10 +30,11 @@ class ConfigurationService:
         finally:
             session.disconnect()
 
-        redacted = redact_secrets(running_config)
-        checksum = hashlib.sha256(redacted.encode("utf-8")).hexdigest()
+        yaml_config = ConfigurationYamlService.running_config_to_yaml(device, running_config, source=source)
+        checksum = ConfigurationYamlService.checksum(yaml_config)
+        legacy_checksum = ConfigurationYamlService.checksum(redact_secrets(running_config))
         baseline = compare_to or ConfigurationRepository.latest_backup_for_device(device.pk)
-        if baseline and baseline.config_checksum == checksum:
+        if baseline and baseline.config_checksum in {checksum, legacy_checksum}:
             logger.info(
                 "Manual configuration refresh completed unchanged %s baseline_backup_id=%s",
                 device_log_context(device, profile),
@@ -48,7 +48,7 @@ class ConfigurationService:
                 "reason": "unchanged",
             }
 
-        backup = ConfigurationVCS.write_backup(device=device, config_text=running_config, source=source)
+        backup = ConfigurationVCS.write_backup(device=device, config_text=yaml_config, source=source)
         logger.info(
             "Manual configuration refresh created backup %s baseline_backup_id=%s backup_id=%s version=%s",
             device_log_context(device, profile),

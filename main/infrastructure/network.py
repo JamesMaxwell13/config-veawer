@@ -10,6 +10,7 @@ from netmiko import ConnectHandler
 import paramiko
 
 from ..models import DeviceCredential, DevicePlatformProfile, ScheduledTask
+from ..application.configuration_yaml import ConfigurationYamlService
 from ..logging import device_log_context, logger
 from .repositories import ConfigurationRepository
 from .vcs import ConfigurationVCS
@@ -48,6 +49,29 @@ class ConnectionSession:
         self.session: Any = None
         self.backend: str | None = None
         self.platform: str | None = None
+
+    @classmethod
+    def save_command_for_platform(cls, platform: str | None) -> str:
+        return cls.SAVE_COMMANDS[platform or "cisco_ios"]
+
+    @classmethod
+    def with_save_command(cls, commands: list[str], platform: str | None) -> list[str]:
+        if not commands:
+            return []
+        save_command = cls.save_command_for_platform(platform)
+        save_key = save_command.strip().lower()
+        normalized = [command.strip() for command in commands if command.strip()]
+        if any(command.lower() == save_key for command in normalized):
+            return normalized
+        return [*normalized, save_command]
+
+    @classmethod
+    def split_save_command(cls, commands: list[str], platform: str | None) -> tuple[list[str], str]:
+        save_command = cls.save_command_for_platform(platform)
+        save_key = save_command.strip().lower()
+        commands_with_save = cls.with_save_command(commands, platform)
+        config_commands = [command for command in commands_with_save if command.lower() != save_key]
+        return config_commands, save_command
 
     def connect(self, host: str, platform: str, credential: DeviceCredential, prefer: str = "netmiko") -> Any:
         if platform not in self.NETMIKO_DEVICE_MAP:
@@ -123,31 +147,34 @@ class ConnectionSession:
         if not commands:
             logger.info("No configuration commands to send platform=%s backend=%s", self.platform, self.backend)
             return ""
+        config_commands, save_command = self.split_save_command(commands, self.platform)
+        command_count = len(config_commands) + 1
         logger.info(
             "Sending configuration commands command_count=%s platform=%s backend=%s",
-            len(commands),
+            command_count,
             self.platform,
             self.backend,
         )
         if self.backend == "netmiko":
-            output = self.session.send_config_set(commands)
-            output += f"\n{self.session.send_command_timing(self.SAVE_COMMANDS[self.platform or 'cisco_ios'])}"
+            output = self.session.send_config_set(config_commands) if config_commands else ""
+            output += f"\n{self.session.send_command_timing(save_command)}"
             logger.info(
                 "Configuration commands completed command_count=%s platform=%s backend=netmiko output_length=%s",
-                len(commands),
+                command_count,
                 self.platform,
                 len(output),
             )
             return output
         shell = self.session.invoke_shell()
-        shell.send("configure terminal\n")
-        for command in commands:
-            shell.send(f"{command}\n")
-        shell.send("end\n")
-        shell.send(f"{self.SAVE_COMMANDS[self.platform or 'cisco_ios']}\n")
+        if config_commands:
+            shell.send("configure terminal\n")
+            for command in config_commands:
+                shell.send(f"{command}\n")
+            shell.send("end\n")
+        shell.send(f"{save_command}\n")
         logger.info(
             "Configuration commands completed command_count=%s platform=%s backend=paramiko",
-            len(commands),
+            command_count,
             self.platform,
         )
         return "Commands sent via Paramiko shell"
@@ -205,9 +232,14 @@ class DeviceConnectionManager:
             backup = ConfigurationVCS.write_backup(device=device, config_text=running_config, source="integrity_check")
             return {"synced": False, "created_backup": backup.version, "reason": "no_backup"}
 
-        incoming_checksum = __import__("hashlib").sha256(running_config.encode("utf-8")).hexdigest()
+        incoming_yaml = ConfigurationYamlService.running_config_to_yaml(
+            device,
+            running_config,
+            source="integrity_check",
+        )
+        incoming_checksum = ConfigurationYamlService.checksum(incoming_yaml)
         if latest.config_checksum != incoming_checksum:
-            backup = ConfigurationVCS.write_backup(device=device, config_text=running_config, source="integrity_check")
+            backup = ConfigurationVCS.write_backup(device=device, config_text=incoming_yaml, source="integrity_check")
             return {"synced": False, "created_backup": backup.version, "reason": "drift_detected"}
 
         return {"synced": True, "created_backup": None, "reason": "up_to_date"}

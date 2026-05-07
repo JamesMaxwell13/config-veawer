@@ -1,3 +1,4 @@
+from django.utils.html import format_html
 from netbox.tables import NetBoxTable
 from netbox.tables.columns import ActionsColumn, TemplateColumn
 import django_tables2 as tables
@@ -33,22 +34,38 @@ class NetworkTaskTable(NetBoxTable):
 
 class ConfigurationBackupTable(NetBoxTable):
     task = tables.Column(empty_values=(), verbose_name="Сценарий")
-    details = TemplateColumn(
-        template_code='<a class="btn btn-sm btn-primary" href="{{ record.get_absolute_url }}">Открыть</a>',
-        verbose_name="Конфиг",
-        orderable=False,
-    )
+    version_name = tables.Column(verbose_name="Название")
 
     def render_task(self, value, record):
         return value or "-"
 
+    def render_version_name(self, value, record):
+        if not value:
+            return "-"
+        return format_html('<a href="{}">{}</a>', record.get_absolute_url(), value)
+
+    def render_commit_hash(self, value):
+        return self._render_short_hash(value)
+
+    def render_config_checksum(self, value):
+        return self._render_short_hash(value)
+
+    @staticmethod
+    def _render_short_hash(value):
+        if not value:
+            return "-"
+        return format_html("<code title=\"{}\">{}</code>", value, value[:12])
+
     class Meta(NetBoxTable.Meta):
         model = ConfigurationBackup
-        fields = ("device", "version", "version_name", "source", "commit_hash", "config_checksum", "created", "details")
+        fields = ("device", "version", "version_name", "source", "commit_hash", "config_checksum", "created")
 
 
 class DevicePlatformProfileTable(NetBoxTable):
-    device = tables.Column(linkify=True, verbose_name="Профиль Config Weaver")
+    device = TemplateColumn(
+        template_code='<a href="{{ record.get_absolute_url }}">{{ record.device }}</a>',
+        verbose_name="Профиль Config Weaver",
+    )
     netbox_device = TemplateColumn(
         template_code='<a href="{{ record.device.get_absolute_url }}">{{ record.device }}</a>',
         verbose_name="Устройство NetBox",

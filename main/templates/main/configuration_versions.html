@@ -14,11 +14,26 @@
       <tbody>
       {% for v in versions %}
         <tr>
-          <td>{{ v.version }}</td>
+          <td>
+            v{{ v.version }}
+            {% if current_version and v.pk == current_version.pk %}
+              <span class="badge text-bg-success ms-1">Текущая</span>
+            {% endif %}
+          </td>
           <td>{{ v.version_name|default:'-' }}</td>
           <td>{{ v.created }}</td>
           <td><code>{{ v.config_checksum|default:'-' }}</code></td>
-          <td><a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Открыть</a></td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Открыть</a>
+            {% if not current_version or v.pk != current_version.pk %}
+              <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=v.pk %}" class="d-inline-block ms-1">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-warning">
+                  <i class="mdi mdi-backup-restore"></i> Отправить на устройство
+                </button>
+              </form>
+            {% endif %}
+          </td>
         </tr>
       {% empty %}
         <tr><td colspan="5" class="text-muted">Конфигураций пока нет.</td></tr>

@@ -698,7 +698,7 @@ List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile
 
 `Command` — Django management command для запуска просроченных задач.
 - Поля и атрибуты: `help`.
-- Методы: `handle(*args, **options)` запускает `TaskExecutor.run_due_tasks()` и печатает количество выполненных задач.
+- Методы: `handle(*args, **options)` запускает `TaskExecutor.run_due_tasks()` без итогового stdout-сообщения.
 
 ### Security hardening
 

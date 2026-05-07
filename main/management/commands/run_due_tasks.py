@@ -7,5 +7,4 @@ class Command(BaseCommand):
     help = "Run due config-weaver scheduled tasks"
 
     def handle(self, *args, **options):
-        executed = TaskExecutor.run_due_tasks()
-        self.stdout.write(self.style.SUCCESS(f"Executed tasks: {executed}"))
+        TaskExecutor.run_due_tasks()

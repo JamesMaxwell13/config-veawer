@@ -111,6 +111,7 @@ class DeviceTerminalService:
         try:
             for command in TerminalBootstrapPolicy.leave_config_mode(self.profile):
                 self.transport.send_line(command)
+            self.transport.send_line(ConnectionSession.save_command_for_platform(self.profile.platform))
             self.read_until_idle(idle_seconds=0.2, max_seconds=1.0)
             command = ConnectionSession.RUNNING_CONFIG_COMMANDS.get(self.profile.platform)
             if not command:

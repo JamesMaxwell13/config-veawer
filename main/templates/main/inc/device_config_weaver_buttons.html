@@ -1,12 +1,3 @@
-<a class="btn btn-primary" href="{% url 'plugins:main:deviceplatformprofile_terminal' pk=profile.pk %}">
-  <i class="mdi mdi-console"></i> Терминал
-</a>
 <a class="btn btn-secondary" href="{{ profile.get_absolute_url }}">
-  <i class="mdi mdi-cog"></i> Config Weaver
+  <i class="mdi mdi-file-document-outline"></i> Профиль Config Weaver
 </a>
-<form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=profile.pk %}" class="d-inline-block">
-  {% csrf_token %}
-  <button type="submit" class="btn btn-info">
-    <i class="mdi mdi-refresh"></i> Получить конфиг
-  </button>
-</form>

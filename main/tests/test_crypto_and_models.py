@@ -1,4 +1,6 @@
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from users.models import User
 
 from main.infrastructure.crypto import decrypt_value, encrypt_value, is_encrypted
 from main.models import DeviceCredential
@@ -61,3 +63,67 @@ class CryptoAndModelTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors.as_data())
         self.assertEqual(form.cleaned_data["password"], cred.password)
         self.assertEqual(form.cleaned_data["enable_secret"], cred.enable_secret)
+
+    def test_reveal_credential_requires_netbox_username_and_password(self):
+        user = User.objects.create_superuser(username="admin", password="netbox-pass")
+        cred = DeviceCredential.objects.create(
+            name="cred1",
+            username="device-admin",
+            password="plain-pass",
+            enable_secret="plain-enable",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk}),
+            {
+                "account_username": "admin",
+                "account_password": "netbox-pass",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "plain-pass")
+        self.assertContains(response, "plain-enable")
+
+    def test_reveal_credential_rejects_wrong_netbox_username(self):
+        user = User.objects.create_superuser(username="admin", password="netbox-pass")
+        cred = DeviceCredential.objects.create(
+            name="cred1",
+            username="device-admin",
+            password="plain-pass",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk}),
+            {
+                "account_username": "other",
+                "account_password": "netbox-pass",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Неверный логин учетной записи NetBox.")
+        self.assertNotContains(response, "plain-pass")
+
+    def test_reveal_credential_rejects_wrong_netbox_password(self):
+        user = User.objects.create_superuser(username="admin", password="netbox-pass")
+        cred = DeviceCredential.objects.create(
+            name="cred1",
+            username="device-admin",
+            password="plain-pass",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk}),
+            {
+                "account_username": "admin",
+                "account_password": "wrong",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Неверный пароль учетной записи NetBox.")
+        self.assertNotContains(response, "plain-pass")

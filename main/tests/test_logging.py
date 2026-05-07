@@ -36,9 +36,24 @@ class ConnectionLoggingTests(SimpleTestCase):
             session.send_config_set(["username admin password secret-value"])
 
         output = "\n".join(logs.output)
-        self.assertIn("command_count=1", output)
+        self.assertIn("command_count=2", output)
         self.assertNotIn("secret-value", output)
         self.assertNotIn("username admin password", output)
+        session.session.send_config_set.assert_called_once_with(["username admin password secret-value"])
+        session.session.send_command_timing.assert_called_once_with("write memory")
+
+    def test_send_config_set_does_not_duplicate_save_command(self):
+        session = ConnectionSession()
+        session.backend = "netmiko"
+        session.platform = "cisco_ios"
+        session.session = MagicMock()
+        session.session.send_config_set.return_value = "configured"
+        session.session.send_command_timing.return_value = "saved"
+
+        session.send_config_set(["hostname router-1", "write memory"])
+
+        session.session.send_config_set.assert_called_once_with(["hostname router-1"])
+        session.session.send_command_timing.assert_called_once_with("write memory")
 
     @patch("main.infrastructure.network.paramiko.SSHClient")
     def test_paramiko_fallback_uses_hostname_argument(self, ssh_client):
@@ -82,7 +97,7 @@ class ScheduledTaskLoggingTests(TestCase):
             TaskExecutor.run_task(task)
 
         output = "\n".join(logs.output)
-        self.assertIn("Scheduled task started", output)
+        self.assertIn("Executing task", output)
         self.assertIn("Scheduled task completed", output)
         self.assertIn("task=backup-now", output)
         self.assertIn("device=router-1", output)

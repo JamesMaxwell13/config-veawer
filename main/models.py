@@ -235,9 +235,7 @@ class ScheduledTask(NetBoxModel):
     task_name = models.CharField(max_length=150)
     task_type = models.CharField(max_length=40, choices=TYPE_CHOICES)
     target_device = models.ForeignKey("dcim.Device", on_delete=models.CASCADE, related_name="scheduled_tasks")
-    task = models.ForeignKey(
-        NetworkTask, on_delete=models.SET_NULL, null=True, blank=True, related_name="scheduled_tasks"
-    )
+    task = models.TextField(blank=True, verbose_name="Таск (YAML)")
     schedule_time = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     result_message = models.TextField(blank=True)

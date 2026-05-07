@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+import hashlib
 
 from django.conf import settings
 from django.core.cache import cache
@@ -14,7 +15,8 @@ from ..domain.configuration import (
     ConfigurationValidator,
     NetworkPlanParser,
 )
-from ..infrastructure.network import DeviceConnectionManager, connect_device_cli
+from .configuration_yaml import ConfigurationYamlService
+from ..infrastructure.network import ConnectionSession, DeviceConnectionManager, connect_device_cli
 from ..infrastructure.repositories import ConfigurationRepository
 from ..infrastructure.vcs import ConfigurationVCS
 from ..logging import device_log_context, logger, task_log_context
@@ -27,20 +29,22 @@ class TaskExecutor:
     @staticmethod
     def preview_commands(task: ScheduledTask) -> list[str]:
         if not task.task:
-            raise ConfigValidationError("Task is required for apply_scenario task")
+            raise ConfigValidationError("YAML task is required for apply_scenario task")
 
         profile = DeviceConnectionManager.get_profile(task.target_device)
         if not profile:
             raise ConfigValidationError(f"No active device profile for {task.target_device.name}")
 
-        task_stamp = int(task.task.last_updated.timestamp()) if task.task.last_updated else 0
-        cache_key = f"cw:preview:{task.pk}:{task_stamp}:{profile.pk}"
+        task_stamp = int(task.last_updated.timestamp()) if task.last_updated else 0
+        task_hash = hashlib.sha256(task.task.encode("utf-8")).hexdigest()[:12]
+        cache_key = f"cw:preview:{task.pk}:{task_stamp}:{task_hash}:{profile.pk}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
-        plan = NetworkPlanParser.normalize_interfaces(NetworkPlanParser.parse_plan(task.task.plan_yaml))
+        plan = NetworkPlanParser.normalize_interfaces(NetworkPlanParser.parse_plan(task.task))
         commands = CommandGenerator.generate_commands(plan, ConfigurationRepository.active_templates(), profile)
+        commands = ConnectionSession.with_save_command(commands, profile.platform)
 
         valid, errors = ConfigurationValidator.validate_commands(commands)
         if not valid:
@@ -64,7 +68,7 @@ class TaskExecutor:
         finally:
             session.disconnect()
 
-        configuration = ConfigurationVCS.write_backup(task.target_device, running, task=task.task, source="runtime")
+        configuration = ConfigurationVCS.write_backup(task.target_device, running, task=None, source="runtime")
         logger.info(
             "Command scenario applied %s command_count=%s configuration_version=%s backup_id=%s",
             task_log_context(task),
@@ -128,11 +132,8 @@ class TaskExecutor:
         )
         session, profile, _check = connect_device_cli(backup.device, verify_saved_config=False)
         try:
-            commands = [
-                line.strip()
-                for line in backup.config_text.splitlines()
-                if line.strip() and not line.strip().startswith("!")
-            ]
+            commands = ConfigurationYamlService.yaml_to_commands(backup.config_text, profile)
+            commands = ConnectionSession.with_save_command(commands, getattr(profile, "platform", None))
             valid, errors = ConfigurationValidator.validate_commands(commands)
             if not valid:
                 logger.warning(
@@ -168,7 +169,7 @@ class TaskExecutor:
             new_configuration.pk,
         )
         return (
-            f"Активирована конфигурация v{backup.version}; "
+            f"Конфигурация v{backup.version} отправлена на устройство; "
             f"текущая конфигурация сохранена как v{new_configuration.version}"
         )
 
@@ -187,7 +188,7 @@ class TaskExecutor:
 
     @classmethod
     def run_task(cls, task: ScheduledTask) -> None:
-        logger.info("Scheduled task started %s", task_log_context(task))
+        logger.info("Executing task %s", task_log_context(task))
         task.update_status(ScheduledTask.STATUS_RUNNING, "Task started")
         try:
             if task.task_type == ScheduledTask.TYPE_APPLY_SCENARIO:

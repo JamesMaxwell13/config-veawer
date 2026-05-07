@@ -1,0 +1,80 @@
+{% extends 'dcim/device/base.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  {% if profile %}
+    <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=profile.pk %}" class="d-inline-block">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-info">
+        <i class="mdi mdi-refresh"></i> Получить конфигурацию
+      </button>
+    </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col col-12">
+      <div class="card">
+        <h5 class="card-header">Текущая конфигурация</h5>
+        <div class="card-body">
+          {% if current_configuration %}
+            <div class="mb-2 text-secondary">
+              v{{ current_configuration.version }}
+              {% if current_configuration.version_name %} · {{ current_configuration.version_name }}{% endif %}
+              · {{ current_configuration.created }}
+            </div>
+            <pre class="mb-0"><code>{{ current_yaml }}</code></pre>
+          {% else %}
+            <div class="text-muted">Конфигураций пока нет.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col col-12">
+      <div class="card">
+        <h5 class="card-header">Предыдущие конфигурации</h5>
+        <div class="card-body">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Версия</th>
+                <th>Название</th>
+                <th>Дата</th>
+                <th>Источник</th>
+                <th>Checksum</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for configuration in previous_configurations %}
+                <tr>
+                  <td>v{{ configuration.version }}</td>
+                  <td>{{ configuration.version_name|default:"-" }}</td>
+                  <td>{{ configuration.created }}</td>
+                  <td>{{ configuration.source }}</td>
+                  <td><code>{{ configuration.config_checksum|default:"-" }}</code></td>
+                  <td class="text-end">
+                    <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=configuration.pk %}" class="d-inline-block">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="mdi mdi-backup-restore"></i> Отправить на устройство
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="text-muted">Предыдущих конфигураций пока нет.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

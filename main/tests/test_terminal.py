@@ -1,8 +1,14 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock, patch
+
 from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from users.models import User
 
+from main.application.terminal import DeviceTerminalService
+from main.infrastructure.vcs import ConfigurationVCS
 from main.models import DeviceCredential, DevicePlatformProfile
 
 
@@ -34,30 +40,38 @@ class DeviceTerminalViewTests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_device_page_has_terminal_button(self):
+    def test_profile_page_renders_config_weaver_profile(self):
         response = self.client.get(self.profile.get_absolute_url())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            reverse("plugins:main:deviceplatformprofile_terminal", kwargs={"pk": self.profile.pk}),
-        )
-        self.assertContains(response, "Терминал")
+        self.assertContains(response, "Доступные команды")
+        self.assertContains(response, "Открыть команды")
+        self.assertContains(response, reverse("plugins:main:commandtemplate_list"))
+        self.assertContains(response, "vendor=cisco")
+        self.assertContains(response, "platform=cisco_ios")
+        self.assertNotContains(response, "CLI устройства")
+        self.assertNotContains(response, "device-cli-form")
 
-    def test_netbox_device_page_has_terminal_button(self):
+    def test_netbox_device_page_has_configurations_button(self):
         response = self.client.get(self.device.get_absolute_url())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(
             response,
+            self.profile.get_absolute_url(),
+        )
+        self.assertContains(response, 'class="btn btn-secondary"')
+        self.assertContains(response, "Профиль Config Weaver")
+        self.assertNotContains(
+            response,
             reverse("plugins:main:deviceplatformprofile_terminal", kwargs={"pk": self.profile.pk}),
         )
-        self.assertContains(response, "Терминал")
 
     def test_plugin_device_list_has_netbox_device_and_terminal_links(self):
         response = self.client.get(reverse("plugins:main:deviceplatformprofile_list"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.profile.get_absolute_url())
         self.assertContains(response, self.device.get_absolute_url())
         self.assertContains(
             response,
@@ -72,9 +86,30 @@ class DeviceTerminalViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "SSH configure terminal")
+        self.assertNotContains(response, "SSH configure terminal")
+        self.assertContains(response, 'id="terminal-status"')
         self.assertContains(
             response,
             f"/ws/plugins/config-weaver/devices/{self.profile.pk}/terminal/",
         )
         self.assertContains(response, f'data-device-url="{self.profile.get_absolute_url()}"')
+
+    def test_terminal_close_saves_configuration_before_backup(self):
+        transport = MagicMock()
+        transport.read_command.return_value = "hostname terminal-sw1"
+        service = DeviceTerminalService(self.profile, self.user, transport=transport)
+        service.closed = False
+
+        with TemporaryDirectory() as tmpdir:
+            with (
+                patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
+                patch("main.infrastructure.vcs.subprocess.run"),
+                patch("main.infrastructure.vcs.subprocess.check_output", return_value=b"abc123\n"),
+            ):
+                service.close()
+
+        transport.send_line.assert_any_call("end")
+        transport.send_line.assert_any_call("write memory")
+        sent_commands = [call.args[0] for call in transport.send_line.call_args_list]
+        self.assertLess(sent_commands.index("end"), sent_commands.index("write memory"))
+        transport.read_command.assert_called_once_with("show running-config")

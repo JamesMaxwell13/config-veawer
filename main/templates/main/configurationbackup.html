@@ -5,19 +5,28 @@
   <a class="btn btn-info ms-1" href="{% url 'plugins:main:configuration_versions' device_id=object.device.pk %}">
     <i class="mdi mdi-format-list-bulleted"></i> Версии устройства
   </a>
-  <a class="btn btn-info ms-1" href="{% url 'plugins:main:configurationbackup_yaml' pk=object.pk %}">
-    <i class="mdi mdi-code-json"></i> Просмотреть YAML
-  </a>
   <form method="post" action="{% url 'plugins:main:configurationbackup_refresh' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">
-      <i class="mdi mdi-refresh"></i> Проверить конфиг
+      <i class="mdi mdi-refresh"></i> Проверить конфигурацию
     </button>
   </form>
   <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-warning">
-      <i class="mdi mdi-backup-restore"></i> Активировать конфигурацию
+      <i class="mdi mdi-backup-restore"></i> Отправить на устройство
     </button>
   </form>
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  <div class="card mt-3">
+    <div class="card-header">
+      <h2 class="card-title">YAML конфигурации</h2>
+    </div>
+    <div class="card-body">
+      <pre class="mb-0"><code>{{ yaml_text }}</code></pre>
+    </div>
+  </div>
 {% endblock %}

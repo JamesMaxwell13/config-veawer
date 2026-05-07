@@ -8,6 +8,7 @@ from netbox.forms import NetBoxModelForm
 from utilities.forms.fields import DynamicModelChoiceField
 
 from ..domain.security import redact_secrets
+from ..application.configuration_yaml import ConfigurationYamlService
 from ..models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -53,6 +54,9 @@ class DeviceCredentialForm(NetBoxModelForm):
 
 
 class CredentialRevealForm(forms.Form):
+    account_username = forms.CharField(
+        label="Логин учетной записи NetBox",
+    )
     account_password = forms.CharField(
         label="Пароль учетной записи NetBox",
         widget=forms.PasswordInput(render_value=False),
@@ -168,7 +172,12 @@ class ConfigurationBackupForm(NetBoxModelForm):
 
     def save(self, *args, **kwargs):
         instance = super().save(commit=False)
-        instance.config_text = redact_secrets(instance.config_text)
+        raw_config = redact_secrets(instance.config_text)
+        instance.config_text = (
+            raw_config
+            if ConfigurationYamlService.is_yaml_config(raw_config)
+            else ConfigurationYamlService.running_config_to_yaml(instance.device, raw_config, source=instance.source or "manual")
+        )
         instance.config_checksum = hashlib.sha256(instance.config_text.encode("utf-8")).hexdigest()
         instance.redacted = True
         if not instance.source:
@@ -192,7 +201,6 @@ class ConfigurationBackupForm(NetBoxModelForm):
 
 class ScheduledTaskForm(NetBoxModelForm):
     target_device = DynamicModelChoiceField(queryset=Device.objects.all())
-    task = DynamicModelChoiceField(queryset=NetworkTask.objects.all(), required=False)
 
     class Meta:
         model = ScheduledTask

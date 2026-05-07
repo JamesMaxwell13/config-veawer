@@ -8,11 +8,13 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
 from netbox.views import generic
-from utilities.views import ObjectPermissionRequiredMixin
+from utilities.views import ObjectPermissionRequiredMixin, ViewTab, register_model_view
+from urllib.parse import urlencode
 import yaml
 
 from . import filtersets, forms, tables
 from ..application.backups import ConfigurationService
+from ..application.configuration_yaml import ConfigurationYamlService
 from ..application.tasks import TaskExecutor
 from ..application.uml import UMLConfigurationService
 from ..domain.configuration import CommandGenerator
@@ -30,16 +32,21 @@ from ..models import (
 )
 
 
-class _ConfigurationYAMLDumper(yaml.SafeDumper):
-    pass
-
-
-def _represent_multiline_string(dumper, value):
-    style = "|" if "\n" in value else None
-    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
-
-
-_ConfigurationYAMLDumper.add_representer(str, _represent_multiline_string)
+def configuration_backup_to_yaml(backup):
+    if ConfigurationYamlService.is_yaml_config(backup.config_text):
+        return backup.config_text
+    payload = {
+        "device": backup.device.name,
+        "version": backup.version,
+        "version_name": backup.version_name,
+        "created": backup.created.isoformat() if backup.created else None,
+        "source": backup.source,
+        "commit_hash": backup.commit_hash,
+        "config_checksum": backup.config_checksum,
+        "redacted": backup.redacted,
+        "config": backup.config_text,
+    }
+    return ConfigurationYamlService.dump_yaml(payload)
 
 
 class DeviceCredentialListView(generic.ObjectListView):
@@ -66,7 +73,11 @@ class DeviceCredentialRevealView(FormView):
         return context
 
     def form_valid(self, form):
+        username = form.cleaned_data["account_username"]
         password = form.cleaned_data["account_password"]
+        if username != self.request.user.get_username():
+            form.add_error("account_username", "Неверный логин учетной записи NetBox.")
+            return self.form_invalid(form)
         if not self.request.user.check_password(password):
             form.add_error("account_password", "Неверный пароль учетной записи NetBox.")
             return self.form_invalid(form)
@@ -96,10 +107,15 @@ class DevicePlatformProfileView(generic.ObjectView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
 
     def get_extra_context(self, request, instance):
+        command_template_url = (
+            reverse("plugins:main:commandtemplate_list")
+            + "?"
+            + urlencode({"vendor": instance.vendor, "platform": instance.platform})
+        )
         return {
             "configurations": ConfigurationBackup.objects.filter(device=instance.device).order_by("-created")[:10],
             "scheduled_tasks": ScheduledTask.objects.filter(target_device=instance.device).order_by("-schedule_time")[:10],
-            "command_form": forms.DeviceCommandForm(),
+            "command_template_url": command_template_url,
         }
 
 
@@ -187,7 +203,7 @@ class DevicePlatformProfileRefreshConfigView(ObjectPermissionRequiredMixin, View
             messages.success(request, f"Конфигурация обновлена. Создана версия v{backup.version}.")
         else:
             messages.success(request, f"Конфигурация не изменилась. Текущая версия v{backup.version}.")
-        return redirect(backup.get_absolute_url())
+        return redirect(reverse("dcim:device_configurations", kwargs={"pk": profile.device.pk}))
 
 
 class DevicePlatformProfileTerminalView(ObjectPermissionRequiredMixin, TemplateView):
@@ -284,6 +300,9 @@ class ConfigurationBackupListView(generic.ObjectListView):
 class ConfigurationBackupView(generic.ObjectView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
 
+    def get_extra_context(self, request, instance):
+        return {"yaml_text": configuration_backup_to_yaml(instance)}
+
 
 class ConfigurationBackupYAMLView(ObjectPermissionRequiredMixin, TemplateView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
@@ -295,25 +314,8 @@ class ConfigurationBackupYAMLView(ObjectPermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         backup = get_object_or_404(self.queryset, pk=kwargs["pk"])
-        payload = {
-            "device": backup.device.name,
-            "version": backup.version,
-            "version_name": backup.version_name,
-            "created": backup.created.isoformat() if backup.created else None,
-            "source": backup.source,
-            "commit_hash": backup.commit_hash,
-            "config_checksum": backup.config_checksum,
-            "redacted": backup.redacted,
-            "config": backup.config_text,
-        }
         context["object"] = backup
-        context["yaml_text"] = yaml.dump(
-            payload,
-            Dumper=_ConfigurationYAMLDumper,
-            allow_unicode=True,
-            sort_keys=False,
-            default_flow_style=False,
-        )
+        context["yaml_text"] = configuration_backup_to_yaml(backup)
         return context
 
 
@@ -346,14 +348,43 @@ class ConfigurationBackupRestoreView(View):
                 request.user,
             )
         except Exception as exc:
-            messages.error(request, f"Не удалось активировать конфигурацию: {exc}")
+            messages.error(request, f"Не удалось отправить конфигурацию на устройство: {exc}")
             logger.exception(
                 "Configuration restore request failed %s backup_id=%s user=%s",
                 device_log_context(backup.device),
                 backup.pk,
                 request.user,
             )
-        return redirect(backup.get_absolute_url())
+        return redirect(reverse("dcim:device_configurations", kwargs={"pk": backup.device.pk}))
+
+
+def _device_has_config_weaver_profile(device):
+    return DevicePlatformProfile.objects.filter(device=device, enabled=True).exists()
+
+
+@register_model_view(Device, "configurations", path="config-weaver-configurations")
+class DeviceConfigurationsView(generic.ObjectView):
+    queryset = Device.objects.all()
+    template_name = "main/device_configurations.html"
+    tab = ViewTab(
+        label="Конфигурации",
+        visible=_device_has_config_weaver_profile,
+        badge=lambda obj: ConfigurationBackup.objects.filter(device=obj).count(),
+        weight=2150,
+        hide_if_empty=False,
+    )
+    actions = ()
+
+    def get_extra_context(self, request, instance):
+        configurations = list(ConfigurationBackup.objects.filter(device=instance).order_by("-version"))
+        current = configurations[0] if configurations else None
+        profile = DevicePlatformProfile.objects.filter(device=instance, enabled=True).first()
+        return {
+            "profile": profile,
+            "current_configuration": current,
+            "previous_configurations": configurations[1:],
+            "current_yaml": configuration_backup_to_yaml(current) if current else "",
+        }
 
 
 class ConfigurationBackupRefreshView(ObjectPermissionRequiredMixin, View):
@@ -400,6 +431,7 @@ class ConfigurationVersionListView(TemplateView):
         versions = ConfigurationBackup.objects.filter(device=device).order_by("-version")
         context["device"] = device
         context["versions"] = versions
+        context["current_version"] = versions.first()
         return context
 
 
@@ -426,17 +458,17 @@ class ConfigurationVersionDiffView(TemplateView):
 
 
 class ScheduledTaskListView(generic.ObjectListView):
-    queryset = ScheduledTask.objects.select_related("target_device", "task")
+    queryset = ScheduledTask.objects.select_related("target_device")
     table = tables.ScheduledTaskTable
     filterset = filtersets.ScheduledTaskFilterSet
 
 
 class ScheduledTaskView(generic.ObjectView):
-    queryset = ScheduledTask.objects.select_related("target_device", "task")
+    queryset = ScheduledTask.objects.select_related("target_device")
 
 
 class ScheduledTaskEditView(generic.ObjectEditView):
-    queryset = ScheduledTask.objects.select_related("target_device", "task")
+    queryset = ScheduledTask.objects.select_related("target_device")
     form = forms.ScheduledTaskForm
 
 

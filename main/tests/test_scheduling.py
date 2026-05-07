@@ -1,10 +1,13 @@
 from datetime import timedelta
+from io import StringIO
 from unittest.mock import MagicMock, patch
 
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from main.application.tasks import TaskExecutor
+from main.domain.configuration import ConfigValidationError
 from main.models import ScheduledTask
 
 
@@ -77,3 +80,24 @@ class ScheduledTaskLogicTests(TestCase):
         executor_cls.assert_called_once_with(max_workers=3)
         executor.submit.assert_called_once_with(run_task_by_id, due_task.pk)
         future.result.assert_called_once_with()
+
+    def test_run_due_tasks_command_does_not_print_executed_count(self):
+        stdout = StringIO()
+
+        with patch.object(TaskExecutor, "run_due_tasks", return_value=0):
+            call_command("run_due_tasks", stdout=stdout)
+
+        output = stdout.getvalue()
+        self.assertEqual(output, "")
+        self.assertNotIn("Executed tasks: 0", output)
+
+    def test_apply_scenario_requires_inline_yaml_task(self):
+        task = ScheduledTask(
+            task_name="empty-yaml",
+            task_type=ScheduledTask.TYPE_APPLY_SCENARIO,
+            schedule_time=timezone.now(),
+            task="",
+        )
+
+        with self.assertRaisesMessage(ConfigValidationError, "YAML task is required"):
+            TaskExecutor.preview_commands(task)

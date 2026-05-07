@@ -12,6 +12,7 @@
 
   let socket = null;
   let disconnectRequested = false;
+  let connected = false;
 
   function websocketUrl(path) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -25,7 +26,7 @@
 
   function setStatus(label, className) {
     statusBadge.textContent = label;
-    statusBadge.className = `badge ${className}`;
+    statusBadge.className = `terminal-status ${className}`;
   }
 
   function sendCommand() {
@@ -40,10 +41,10 @@
 
   function connect() {
     socket = new WebSocket(websocketUrl(root.dataset.wsPath));
-    setStatus("Подключение", "bg-secondary");
+    setStatus("Подключение", "text-secondary");
 
     socket.addEventListener("open", () => {
-      setStatus("SSH", "bg-info");
+      setStatus("SSH", "text-info");
     });
 
     socket.addEventListener("message", (event) => {
@@ -59,21 +60,26 @@
         appendOutput(message.data || "");
       } else if (message.type === "status") {
         if (message.state === "connected") {
-          setStatus("Подключено", "bg-success");
+          connected = true;
+          setStatus("Подключено", "text-success");
           input.disabled = false;
           sendButton.disabled = false;
           input.focus();
         } else if (message.state === "connecting") {
-          setStatus("Подключение", "bg-secondary");
+          setStatus("Подключение", "text-secondary");
         }
       } else if (message.type === "error") {
         appendOutput(`\n[ERROR] ${message.message}\n`);
-        setStatus("Ошибка", "bg-danger");
+        setStatus("Ошибка", "text-danger");
       }
     });
 
     socket.addEventListener("close", () => {
-      setStatus("Отключено", "bg-secondary");
+      if (!connected && !disconnectRequested) {
+        setStatus("Невозможно подключиться", "text-danger");
+      } else {
+        setStatus("Отключено", "text-secondary");
+      }
       input.disabled = true;
       sendButton.disabled = true;
       if (disconnectRequested && root.dataset.deviceUrl) {
@@ -83,7 +89,7 @@
 
     socket.addEventListener("error", () => {
       appendOutput("\n[ERROR] Ошибка WebSocket-соединения\n");
-      setStatus("Ошибка", "bg-danger");
+      setStatus("Невозможно подключиться", "text-danger");
     });
   }
 

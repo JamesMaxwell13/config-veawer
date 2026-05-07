@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import hashlib
-import json
 import re
 import subprocess
 
@@ -12,7 +11,7 @@ from dcim.models import Device
 from django.conf import settings
 from django.utils import timezone
 
-from ..domain.security import redact_secrets
+from ..application.configuration_yaml import ConfigurationYamlService
 from ..logging import device_log_context, logger
 from ..models import ConfigurationBackup, NetworkTask
 
@@ -96,21 +95,16 @@ class ConfigurationVCS:
         repo = cls.repo_path()
         version = cls.next_version(device)
         safe_name = cls.safe_file_name(device.name)
-        file_name = f"{safe_name}__v{version}.json"
+        file_name = f"{safe_name}__v{version}.yaml"
 
-        redacted = redact_secrets(config_text)
         version_name = cls.build_unique_version_name(device)
-        payload = {
-            "device": device.name,
-            "version": version,
-            "version_name": version_name,
-            "saved_at": timezone.now().isoformat(),
-            "task": task.name if task else None,
-            "source": source,
-            "config": redacted,
-        }
+        yaml_text = (
+            config_text
+            if ConfigurationYamlService.is_yaml_config(config_text)
+            else ConfigurationYamlService.running_config_to_yaml(device, config_text, source=source)
+        )
 
-        checksum = hashlib.sha256(redacted.encode("utf-8")).hexdigest()
+        checksum = hashlib.sha256(yaml_text.encode("utf-8")).hexdigest()
         logger.info(
             "Writing configuration backup %s source=%s task=%s version=%s version_name=%s checksum=%s",
             device_log_context(device),
@@ -121,7 +115,7 @@ class ConfigurationVCS:
             checksum,
         )
         try:
-            (repo / file_name).write_text(json.dumps(payload, ensure_ascii=True, indent=2), encoding="utf-8")
+            (repo / file_name).write_text(yaml_text, encoding="utf-8")
             subprocess.run(["git", "add", file_name], cwd=repo, check=True)
             subprocess.run(["git", "commit", "-m", f"backup({safe_name}): version {version}"], cwd=repo, check=True)
             commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo).decode().strip()
@@ -140,7 +134,7 @@ class ConfigurationVCS:
             task=task,
             version=version,
             version_name=version_name,
-            config_text=redacted,
+            config_text=yaml_text,
             source=source,
             commit_hash=commit_hash,
             config_checksum=checksum,
