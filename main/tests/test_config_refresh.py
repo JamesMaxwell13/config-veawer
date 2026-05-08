@@ -209,6 +209,48 @@ class ConfigurationRefreshTests(TestCase):
         )
         self.assertContains(response, "Получить конфигурацию")
 
+    def test_device_get_config_redirects_to_created_configuration(self):
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            config_text="hostname refresh-sw1",
+            source="manual_refresh",
+            config_checksum="created-checksum",
+        )
+
+        with patch.object(
+            ConfigurationService,
+            "refresh_device_config",
+            return_value={"changed": True, "backup": backup},
+        ) as refresh:
+            response = self.client.post(
+                reverse("plugins:main:deviceplatformprofile_refresh_config", kwargs={"pk": self.profile.pk})
+            )
+
+        refresh.assert_called_once_with(self.device)
+        self.assertRedirects(response, backup.get_absolute_url(), fetch_redirect_response=False)
+
+    def test_device_get_config_redirects_to_existing_configuration_when_unchanged(self):
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            config_text="hostname refresh-sw1",
+            source="runtime",
+            config_checksum="existing-checksum",
+        )
+
+        with patch.object(
+            ConfigurationService,
+            "refresh_device_config",
+            return_value={"changed": False, "backup": backup},
+        ) as refresh:
+            response = self.client.post(
+                reverse("plugins:main:deviceplatformprofile_refresh_config", kwargs={"pk": self.profile.pk})
+            )
+
+        refresh.assert_called_once_with(self.device)
+        self.assertRedirects(response, backup.get_absolute_url(), fetch_redirect_response=False)
+
     def test_device_configurations_page_shows_current_and_previous_versions(self):
         ConfigurationBackup.objects.create(
             device=self.device,
@@ -372,6 +414,158 @@ class ConfigurationRefreshTests(TestCase):
         restored = ConfigurationBackup.objects.filter(device=self.device).order_by("-version").first()
         self.assertEqual(restored.source, "restore")
         self.assertTrue(ConfigurationYamlService.is_yaml_config(restored.config_text))
+
+    def test_running_config_yaml_keeps_interface_raw_commands_in_section(self):
+        raw_config = """
+hostname Switch3
+!
+ip routing
+!
+interface FastEthernet0/5
+ shutdown
+!
+interface Vlan100
+ mac-address 000c.8564.5402
+ ip address 38.189.96.100 255.255.224.0
+ ip access-group Permit_Admin in
+!
+ip access-list extended Deny_Admin
+ deny ip any 38.189.96.0 0.0.31.255
+ permit icmp any host 38.189.96.101 echo-reply
+!
+line vty 0
+ password switch3
+ login
+!
+end
+"""
+        yaml_text = ConfigurationYamlService.running_config_to_yaml(self.device, raw_config)
+        payload = ConfigurationYamlService.load_payload(yaml_text)
+
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertNotIn("shutdown", payload["raw_commands"])
+        section_map = {section["header"]: section for section in payload["sections"]}
+        self.assertIn("interface FastEthernet0/5", section_map)
+        self.assertFalse(section_map["interface FastEthernet0/5"]["raw_commands"])
+        self.assertIn("ip access-list extended Deny_Admin", section_map)
+        self.assertNotIn("deny ip any 38.189.96.0 0.0.31.255", payload["raw_commands"])
+        self.assertIn("line vty 0", section_map)
+
+        commands = ConfigurationYamlService.yaml_to_commands(yaml_text, self.profile)
+        self.assertIn("interface FastEthernet0/5", commands)
+        self.assertGreater(commands.index("shutdown"), commands.index("interface FastEthernet0/5"))
+        self.assertIn("ip access-list extended Deny_Admin", commands)
+        self.assertGreater(commands.index("deny ip any 38.189.96.0 0.0.31.255"), commands.index("ip access-list extended Deny_Admin"))
+        self.assertIn("line vty 0", commands)
+        self.assertGreater(commands.index("login"), commands.index("line vty 0"))
+
+    def test_running_config_yaml_keeps_ipv6_tunnel_and_gatekeeper_context(self):
+        raw_config = """
+Building configuration...
+Current configuration : 1556 bytes
+!
+hostname R7
+!
+ipv6 unicast-routing
+ipv6 cef
+!
+interface Tunnel0
+ no ip address
+ ipv6 address FE80::7 link-local
+ ipv6 address FD00:0:0:8::7/64
+ ipv6 enable
+ no ipv6 nd ra suppress
+ tunnel source FastEthernet1/0
+ tunnel mode ipv6ip
+ tunnel destination 185.216.178.129
+!
+interface FastEthernet3/0
+ no ip address
+ shutdown
+ duplex half
+!
+ipv6 route ::/0 FastEthernet2/0 FE80::4
+!
+gatekeeper
+ shutdown
+!
+line con 0
+ exec-timeout 0 0
+ privilege level 15
+ logging synchronous
+ stopbits 1
+!
+end
+"""
+        yaml_text = ConfigurationYamlService.running_config_to_yaml(self.device, raw_config)
+        payload = ConfigurationYamlService.load_payload(yaml_text)
+        section_map = {section["header"]: section for section in payload["sections"]}
+
+        self.assertNotIn("shutdown", payload["raw_commands"])
+        self.assertIn("interface Tunnel0", section_map)
+        self.assertIn("interface FastEthernet3/0", section_map)
+        self.assertIn("gatekeeper", section_map)
+        self.assertEqual(section_map["gatekeeper"]["raw_commands"], ["shutdown"])
+        self.assertIn("line con 0", section_map)
+
+        commands = ConfigurationYamlService.yaml_to_commands(yaml_text, self.profile)
+        self.assertIn("interface FastEthernet3/0", commands)
+        self.assertGreater(commands.index("shutdown"), commands.index("interface FastEthernet3/0"))
+        self.assertIn("gatekeeper", commands)
+        self.assertGreater(commands.index("shutdown", commands.index("gatekeeper")), commands.index("gatekeeper"))
+        self.assertIn("ipv6 route ::/0 FastEthernet2/0 FE80::4", commands)
+
+    def test_running_config_yaml_keeps_nat_router_sections_contextual(self):
+        raw_config = """
+Current configuration : 1104 bytes
+!
+hostname Router
+!
+no ip cef
+no ipv6 cef
+spanning-tree mode pvst
+!
+interface FastEthernet0/0
+ ip address 167.177.5.249 255.255.255.248
+ ip nat outside
+ duplex auto
+ speed auto
+!
+interface FastEthernet0/1
+ ip address 69.20.59.1 255.255.255.0
+ ip nat inside
+ duplex auto
+ speed auto
+!
+interface Vlan1
+ no ip address
+ shutdown
+!
+router rip
+!
+ip nat inside source static 69.20.59.2 202.141.23.115
+ip route 0.0.0.0 0.0.0.0 167.177.5.250
+!
+line vty 0 4
+ login
+!
+end
+"""
+        yaml_text = ConfigurationYamlService.running_config_to_yaml(self.device, raw_config)
+        payload = ConfigurationYamlService.load_payload(yaml_text)
+        section_map = {section["header"]: section for section in payload["sections"]}
+
+        self.assertNotIn("login", payload["raw_commands"])
+        self.assertNotIn("shutdown", payload["raw_commands"])
+        self.assertIn("interface Vlan1", section_map)
+        self.assertIn("router rip", section_map)
+        self.assertIn("line vty 0 4", section_map)
+
+        commands = ConfigurationYamlService.yaml_to_commands(yaml_text, self.profile)
+        self.assertIn("interface Vlan1", commands)
+        self.assertGreater(commands.index("shutdown"), commands.index("interface Vlan1"))
+        self.assertIn("router rip", commands)
+        self.assertIn("ip nat inside source static 69.20.59.2 202.141.23.115", commands)
 
     def test_scheduled_task_preview_includes_save_command(self):
         CommandTemplate.objects.create(

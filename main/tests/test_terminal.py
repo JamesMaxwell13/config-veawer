@@ -93,6 +93,7 @@ class DeviceTerminalViewTests(TestCase):
             f"/ws/plugins/config-weaver/devices/{self.profile.pk}/terminal/",
         )
         self.assertContains(response, f'data-device-url="{self.profile.get_absolute_url()}"')
+        self.assertContains(response, "main/device_terminal.js")
 
     def test_terminal_close_saves_configuration_before_backup(self):
         transport = MagicMock()

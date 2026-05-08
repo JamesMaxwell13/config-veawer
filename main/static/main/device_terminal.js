@@ -13,6 +13,10 @@
   let socket = null;
   let disconnectRequested = false;
   let connected = false;
+  const commandHistory = [];
+  const maxHistorySize = 100;
+  let historyIndex = null;
+  let historyDraft = "";
 
   function websocketUrl(path) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -29,12 +33,57 @@
     statusBadge.className = `terminal-status ${className}`;
   }
 
+  function rememberCommand(command) {
+    if (commandHistory[commandHistory.length - 1] !== command) {
+      commandHistory.push(command);
+      if (commandHistory.length > maxHistorySize) {
+        commandHistory.shift();
+      }
+    }
+    historyIndex = null;
+    historyDraft = "";
+  }
+
+  function setInputValue(value) {
+    input.value = value;
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+
+  function showPreviousCommand() {
+    if (!commandHistory.length) {
+      return;
+    }
+    if (historyIndex === null) {
+      historyDraft = input.value;
+      historyIndex = commandHistory.length - 1;
+    } else if (historyIndex > 0) {
+      historyIndex -= 1;
+    }
+    setInputValue(commandHistory[historyIndex]);
+  }
+
+  function showNextCommand() {
+    if (historyIndex === null) {
+      return;
+    }
+    if (historyIndex < commandHistory.length - 1) {
+      historyIndex += 1;
+      setInputValue(commandHistory[historyIndex]);
+      return;
+    }
+    historyIndex = null;
+    setInputValue(historyDraft);
+    historyDraft = "";
+  }
+
   function sendCommand() {
     const command = input.value;
-    if (!command.trim() || !socket || socket.readyState !== WebSocket.OPEN) {
+    const trimmedCommand = command.trim();
+    if (!trimmedCommand || !socket || socket.readyState !== WebSocket.OPEN) {
       return;
     }
     socket.send(JSON.stringify({ type: "input", data: `${command}\n` }));
+    rememberCommand(trimmedCommand);
     input.value = "";
     input.focus();
   }
@@ -101,6 +150,12 @@
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       sendCommand();
+    } else if (event.key === "ArrowUp" && !event.shiftKey) {
+      event.preventDefault();
+      showPreviousCommand();
+    } else if (event.key === "ArrowDown" && !event.shiftKey) {
+      event.preventDefault();
+      showNextCommand();
     }
   });
   disconnectButton.addEventListener("click", () => {

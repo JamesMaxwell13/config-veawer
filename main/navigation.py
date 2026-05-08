@@ -58,6 +58,10 @@ menu_items = (
             ),
         ),
     ),
+    PluginMenuItem(
+        link="plugins:main:swagger_ui",
+        link_text="API Docs",
+    ),
 )
 
 menu = PluginMenu(

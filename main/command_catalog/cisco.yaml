@@ -9,6 +9,177 @@ templates:
     command_body: |
       hostname {hostname}
 
+  - name: enable_password
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Set enable password.
+    params: [password]
+    command_body: |
+      enable password {password}
+
+  - name: service_timestamps_debug
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure debug timestamps.
+    params: [format]
+    command_body: |
+      service timestamps debug {format}
+
+  - name: service_timestamps_log
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure log timestamps.
+    params: [format]
+    command_body: |
+      service timestamps log {format}
+
+  - name: service_password_encryption
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable service password encryption.
+    params: []
+    command_body: |
+      service password-encryption
+
+  - name: no_service_password_encryption
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Disable service password encryption.
+    params: []
+    command_body: |
+      no service password-encryption
+
+  - name: ip_routing
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv4 routing.
+    params: []
+    command_body: |
+      ip routing
+
+  - name: ip_classless
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable classless routing behavior.
+    params: []
+    command_body: |
+      ip classless
+
+  - name: ip_flow_export_version
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure NetFlow export version.
+    params: [version]
+    command_body: |
+      ip flow-export version {version}
+
+  - name: ip_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable Cisco Express Forwarding for IPv4.
+    params: []
+    command_body: |
+      ip cef
+
+  - name: no_ip_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable Cisco Express Forwarding for IPv4.
+    params: []
+    command_body: |
+      no ip cef
+
+  - name: ipv6_unicast_routing
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv6 unicast routing.
+    params: []
+    command_body: |
+      ipv6 unicast-routing
+
+  - name: ipv6_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable Cisco Express Forwarding for IPv6.
+    params: []
+    command_body: |
+      ipv6 cef
+
+  - name: no_ipv6_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable Cisco Express Forwarding for IPv6.
+    params: []
+    command_body: |
+      no ipv6 cef
+
+  - name: no_ip_domain_lookup
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable DNS lookup for mistyped commands.
+    params: []
+    command_body: |
+      no ip domain lookup
+
+  - name: no_ip_http_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable HTTP server.
+    params: []
+    command_body: |
+      no ip http server
+
+  - name: no_ip_http_secure_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable HTTPS server.
+    params: []
+    command_body: |
+      no ip http secure-server
+
+  - name: no_cdp_log_mismatch_duplex
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Disable CDP duplex mismatch logging.
+    params: []
+    command_body: |
+      no cdp log mismatch duplex
+
+  - name: spanning_tree_mode
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure spanning-tree mode.
+    params: [mode]
+    command_body: |
+      spanning-tree mode {mode}
+
+  - name: spanning_tree_vlan_priority
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure spanning-tree priority for VLAN list.
+    params: [vlan_list, priority]
+    command_body: |
+      spanning-tree vlan {vlan_list} priority {priority}
+
   - name: interface_description
     platform: cisco_ios
     operation_type: interface
@@ -90,6 +261,156 @@ templates:
     command_body: |
       interface {interface}
       ip address {ip} {mask}
+
+  - name: no_ip_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Remove IPv4 address from an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no ip address
+
+  - name: ipv6_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv6 address under an interface.
+    params: [interface, address]
+    command_body: |
+      interface {interface}
+      ipv6 address {address}
+
+  - name: ipv6_enable
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv6 processing under an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ipv6 enable
+
+  - name: no_ipv6_nd_ra_suppress
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Allow IPv6 router advertisements under an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no ipv6 nd ra suppress
+
+  - name: mac_address
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface MAC address.
+    params: [interface, mac]
+    command_body: |
+      interface {interface}
+      mac-address {mac}
+
+  - name: ip_access_group
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Apply IPv4 access group to an interface.
+    params: [interface, acl, direction]
+    command_body: |
+      interface {interface}
+      ip access-group {acl} {direction}
+
+  - name: duplex
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface duplex.
+    params: [interface, duplex]
+    command_body: |
+      interface {interface}
+      duplex {duplex}
+
+  - name: speed
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface speed.
+    params: [interface, speed]
+    command_body: |
+      interface {interface}
+      speed {speed}
+
+  - name: switchport_trunk_native_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk native VLAN.
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport trunk native vlan {vlan_id}
+
+  - name: switchport_trunk_allowed_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk allowed VLAN list.
+    params: [interface, vlan_list]
+    command_body: |
+      interface {interface}
+      switchport trunk allowed vlan {vlan_list}
+
+  - name: switchport_trunk_encapsulation
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk encapsulation.
+    params: [interface, encapsulation]
+    command_body: |
+      interface {interface}
+      switchport trunk encapsulation {encapsulation}
+
+  - name: channel_group
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Assign interface to an EtherChannel group.
+    params: [interface, group, mode]
+    command_body: |
+      interface {interface}
+      channel-group {group} mode {mode}
+
+  - name: tunnel_source
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel source.
+    params: [interface, source]
+    command_body: |
+      interface {interface}
+      tunnel source {source}
+
+  - name: tunnel_mode
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel mode.
+    params: [interface, mode]
+    command_body: |
+      interface {interface}
+      tunnel mode {mode}
+
+  - name: tunnel_destination
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel destination.
+    params: [interface, destination]
+    command_body: |
+      interface {interface}
+      tunnel destination {destination}
 
   - name: vlan_create
     platform: cisco_ios
@@ -192,6 +513,15 @@ templates:
     command_body: |
       ip route {network} {mask} {next_hop}
 
+  - name: ipv6_route
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv6 static route.
+    params: [prefix, interface, next_hop]
+    command_body: |
+      ipv6 route {prefix} {interface} {next_hop}
+
   - name: numbered_acl_permit
     platform: cisco_ios
     operation_type: custom
@@ -267,6 +597,26 @@ templates:
     command_body: |
       ip access-list extended {name}
       deny {protocol} {src} {src_wildcard} {dst} {dst_wildcard}
+
+  - name: extended_acl_permit_rule
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add flexible permit rule to an extended named ACL.
+    params: [name, rule]
+    command_body: |
+      ip access-list extended {name}
+      permit {rule}
+
+  - name: extended_acl_deny_rule
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add flexible deny rule to an extended named ACL.
+    params: [name, rule]
+    command_body: |
+      ip access-list extended {name}
+      deny {rule}
 
   - name: dhcp_pool
     platform: cisco_ios
@@ -365,6 +715,85 @@ templates:
     params: [inside_ip, outside_ip]
     command_body: |
       ip nat inside source static {inside_ip} {outside_ip}
+
+  - name: router_rip
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter RIP router configuration mode.
+    params: []
+    command_body: |
+      router rip
+
+  - name: line_password
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line password.
+    params: [line, password]
+    command_body: |
+      line {line}
+      password {password}
+
+  - name: line_login
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable login under a line.
+    params: [line]
+    command_body: |
+      line {line}
+      login
+
+  - name: line_transport_input
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure allowed line transport input.
+    params: [line, transports]
+    command_body: |
+      line {line}
+      transport input {transports}
+
+  - name: line_exec_timeout
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line exec timeout.
+    params: [line, minutes, seconds]
+    command_body: |
+      line {line}
+      exec-timeout {minutes} {seconds}
+
+  - name: line_privilege_level
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line privilege level.
+    params: [line, level]
+    command_body: |
+      line {line}
+      privilege level {level}
+
+  - name: line_logging_synchronous
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable synchronous logging under a line.
+    params: [line]
+    command_body: |
+      line {line}
+      logging synchronous
+
+  - name: line_stopbits
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line stop bits.
+    params: [line, stopbits]
+    command_body: |
+      line {line}
+      stopbits {stopbits}
 
   - name: save_config
     platform: cisco_ios

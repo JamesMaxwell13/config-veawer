@@ -4,8 +4,11 @@ import json
 import yaml
 
 from dcim.models import Device
-from netbox.forms import NetBoxModelForm
+from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelForm
+from utilities.forms import add_blank_choice
 from utilities.forms.fields import DynamicModelChoiceField
+from utilities.forms.rendering import FieldSet
+from utilities.forms.widgets import BulkEditNullBooleanSelect, DateTimePicker
 
 from ..domain.security import redact_secrets
 from ..application.configuration_yaml import ConfigurationYamlService
@@ -71,6 +74,23 @@ class CredentialRevealForm(forms.Form):
     )
 
 
+class DeviceCredentialBulkEditForm(NetBoxModelBulkEditForm):
+    auth_method = forms.ChoiceField(
+        choices=add_blank_choice(DeviceCredential.AUTH_CHOICES),
+        required=False,
+    )
+    username = forms.CharField(max_length=128, required=False)
+    ssh_port = forms.IntegerField(min_value=1, required=False)
+    timeout = forms.IntegerField(min_value=1, required=False)
+    use_enable = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+    is_active = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+
+    model = DeviceCredential
+    fieldsets = (
+        FieldSet("auth_method", "username", "ssh_port", "timeout", "use_enable", "is_active"),
+    )
+
+
 class DevicePlatformProfileForm(NetBoxModelForm):
     device = DynamicModelChoiceField(queryset=Device.objects.all())
     credential = DynamicModelChoiceField(queryset=DeviceCredential.objects.all())
@@ -87,6 +107,27 @@ class DevicePlatformProfileForm(NetBoxModelForm):
             "enabled",
             "tags",
         )
+
+
+class DevicePlatformProfileBulkEditForm(NetBoxModelBulkEditForm):
+    credential = DynamicModelChoiceField(queryset=DeviceCredential.objects.all(), required=False)
+    vendor = forms.ChoiceField(
+        choices=add_blank_choice(DevicePlatformProfile.VENDOR_CHOICES),
+        required=False,
+    )
+    platform = forms.ChoiceField(
+        choices=add_blank_choice(DevicePlatformProfile.PLATFORM_CHOICES),
+        required=False,
+    )
+    management_ip = forms.GenericIPAddressField(protocol="IPv4", required=False)
+    command_timeout = forms.IntegerField(min_value=1, required=False)
+    enabled = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+
+    model = DevicePlatformProfile
+    fieldsets = (
+        FieldSet("credential", "vendor", "platform", "management_ip", "command_timeout", "enabled"),
+    )
+    nullable_fields = ("management_ip",)
 
 
 class DeviceCommandForm(forms.Form):
@@ -126,6 +167,21 @@ class CommandTemplateForm(NetBoxModelForm):
         )
 
 
+class CommandTemplateBulkEditForm(NetBoxModelBulkEditForm):
+    vendor = forms.CharField(max_length=100, required=False)
+    platform = forms.CharField(max_length=100, required=False)
+    operation_type = forms.ChoiceField(
+        choices=add_blank_choice(CommandTemplate.OP_CHOICES),
+        required=False,
+    )
+    is_active = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+
+    model = CommandTemplate
+    fieldsets = (
+        FieldSet("vendor", "platform", "operation_type", "is_active"),
+    )
+
+
 class CommandTemplatePreviewForm(forms.Form):
     params = forms.CharField(
         label="Параметры шаблона",
@@ -162,6 +218,18 @@ class NetworkTaskForm(NetBoxModelForm):
         widgets = {
             "plan_yaml": forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 18}),
         }
+
+
+class ConfigurationBackupBulkEditForm(NetBoxModelBulkEditForm):
+    task = DynamicModelChoiceField(queryset=NetworkTask.objects.all(), required=False)
+    source = forms.CharField(max_length=64, required=False)
+    redacted = forms.NullBooleanField(required=False, widget=BulkEditNullBooleanSelect())
+
+    model = ConfigurationBackup
+    fieldsets = (
+        FieldSet("task", "source", "redacted"),
+    )
+    nullable_fields = ("task",)
 
 
 class ConfigurationBackupForm(NetBoxModelForm):
@@ -233,6 +301,27 @@ class ScheduledTaskForm(NetBoxModelForm):
         widgets = {
             "task": forms.Textarea(attrs={**YAML_EDITOR_ATTRS, "rows": 14}),
         }
+
+
+class ScheduledTaskBulkEditForm(NetBoxModelBulkEditForm):
+    task_type = forms.ChoiceField(
+        choices=add_blank_choice(ScheduledTask.TYPE_CHOICES),
+        required=False,
+    )
+    target_device = DynamicModelChoiceField(queryset=Device.objects.all(), required=False)
+    schedule_time = forms.DateTimeField(required=False, widget=DateTimePicker())
+    run_every_seconds = forms.IntegerField(min_value=1, required=False)
+    max_retries = forms.IntegerField(min_value=0, required=False)
+    status = forms.ChoiceField(
+        choices=add_blank_choice(ScheduledTask.STATUS_CHOICES),
+        required=False,
+    )
+
+    model = ScheduledTask
+    fieldsets = (
+        FieldSet("task_type", "target_device", "schedule_time", "run_every_seconds", "max_retries", "status"),
+    )
+    nullable_fields = ("run_every_seconds",)
 
 
 class UMLConfigurationForm(NetBoxModelForm):

@@ -99,6 +99,19 @@ class DeviceCredentialDeleteView(generic.ObjectDeleteView):
     queryset = DeviceCredential.objects.all()
 
 
+class DeviceCredentialBulkEditView(generic.BulkEditView):
+    queryset = DeviceCredential.objects.all()
+    table = tables.DeviceCredentialTable
+    filterset = filtersets.DeviceCredentialFilterSet
+    form = forms.DeviceCredentialBulkEditForm
+
+
+class DeviceCredentialBulkDeleteView(generic.BulkDeleteView):
+    queryset = DeviceCredential.objects.all()
+    table = tables.DeviceCredentialTable
+    filterset = filtersets.DeviceCredentialFilterSet
+
+
 class DevicePlatformProfileListView(generic.ObjectListView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
     table = tables.DevicePlatformProfileTable
@@ -148,6 +161,19 @@ class DevicePlatformProfileEditView(generic.ObjectEditView):
 
 class DevicePlatformProfileDeleteView(generic.ObjectDeleteView):
     queryset = DevicePlatformProfile.objects.all()
+
+
+class DevicePlatformProfileBulkEditView(generic.BulkEditView):
+    queryset = DevicePlatformProfile.objects.select_related("device", "credential")
+    table = tables.DevicePlatformProfileTable
+    filterset = filtersets.DevicePlatformProfileFilterSet
+    form = forms.DevicePlatformProfileBulkEditForm
+
+
+class DevicePlatformProfileBulkDeleteView(generic.BulkDeleteView):
+    queryset = DevicePlatformProfile.objects.select_related("device", "credential")
+    table = tables.DevicePlatformProfileTable
+    filterset = filtersets.DevicePlatformProfileFilterSet
 
 
 class DevicePlatformProfileCLIView(View):
@@ -225,7 +251,7 @@ class DevicePlatformProfileRefreshConfigView(ObjectPermissionRequiredMixin, View
             messages.success(request, f"Конфигурация обновлена. Создана версия v{backup.version}.")
         else:
             messages.success(request, f"Конфигурация не изменилась. Текущая версия v{backup.version}.")
-        return redirect(reverse("dcim:device_configurations", kwargs={"pk": profile.device.pk}))
+        return redirect(backup.get_absolute_url())
 
 
 class DevicePlatformProfileTerminalView(ObjectPermissionRequiredMixin, TemplateView):
@@ -264,6 +290,19 @@ class CommandTemplateEditView(generic.ObjectEditView):
 
 class CommandTemplateDeleteView(generic.ObjectDeleteView):
     queryset = CommandTemplate.objects.all()
+
+
+class CommandTemplateBulkEditView(generic.BulkEditView):
+    queryset = CommandTemplate.objects.all()
+    table = tables.CommandTemplateTable
+    filterset = filtersets.CommandTemplateFilterSet
+    form = forms.CommandTemplateBulkEditForm
+
+
+class CommandTemplateBulkDeleteView(generic.BulkDeleteView):
+    queryset = CommandTemplate.objects.all()
+    table = tables.CommandTemplateTable
+    filterset = filtersets.CommandTemplateFilterSet
 
 
 class CommandTemplatePreviewView(FormView):
@@ -351,6 +390,19 @@ class ConfigurationBackupEditView(generic.ObjectEditView):
 
 class ConfigurationBackupDeleteView(generic.ObjectDeleteView):
     queryset = ConfigurationBackup.objects.select_related("device", "task")
+
+
+class ConfigurationBackupBulkEditView(generic.BulkEditView):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+    table = tables.ConfigurationBackupTable
+    filterset = filtersets.ConfigurationBackupFilterSet
+    form = forms.ConfigurationBackupBulkEditForm
+
+
+class ConfigurationBackupBulkDeleteView(generic.BulkDeleteView):
+    queryset = ConfigurationBackup.objects.select_related("device", "task")
+    table = tables.ConfigurationBackupTable
+    filterset = filtersets.ConfigurationBackupFilterSet
 
 
 class ConfigurationBackupRestoreView(View):
@@ -499,6 +551,19 @@ class ScheduledTaskEditView(generic.ObjectEditView):
 
 class ScheduledTaskDeleteView(generic.ObjectDeleteView):
     queryset = ScheduledTask.objects.all()
+
+
+class ScheduledTaskBulkEditView(generic.BulkEditView):
+    queryset = ScheduledTask.objects.select_related("target_device")
+    table = tables.ScheduledTaskTable
+    filterset = filtersets.ScheduledTaskFilterSet
+    form = forms.ScheduledTaskBulkEditForm
+
+
+class ScheduledTaskBulkDeleteView(generic.BulkDeleteView):
+    queryset = ScheduledTask.objects.select_related("target_device")
+    table = tables.ScheduledTaskTable
+    filterset = filtersets.ScheduledTaskFilterSet
 
 
 class ScheduledTaskRunNowView(View):

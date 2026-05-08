@@ -1,24 +1,37 @@
-# Туториал по шаблонам команд
+# Command Catalog
 
-В этой директории находится встроенный каталог команд Config Weaver.
+This directory contains built-in command templates for config-weaver.
 
-- `cisco.yaml` содержит шаблоны команд Cisco.
-- `dlink.yaml` содержит шаблоны команд D-Link.
+- `cisco.yaml` - Cisco IOS-style templates.
+- `dlink.yaml` - D-Link templates.
 
-Каталог не является полным справочником CLI-команд производителя. Это стартовый набор для типовых и повторяемых операций. Редкие разовые команды лучше добавлять через `raw_commands` или через пользовательские шаблоны в интерфейсе NetBox.
+The catalog is not intended to be a complete vendor CLI reference. It is a reusable baseline for common operations and for converting saved running-config YAML back into commands.
 
-## Как загружаются шаблоны
+## Template Sources
 
-Во время работы Config Weaver объединяет два источника:
+At runtime config-weaver merges two sources:
 
-1. Встроенные YAML-шаблоны из этой директории.
-2. Активные объекты `CommandTemplate`, созданные через UI или API NetBox.
+1. Built-in YAML templates from this directory.
+2. Active `CommandTemplate` objects stored in NetBox.
 
-Если шаблон из базы данных имеет те же `vendor`, `platform`, `operation_type` и `name`, что и YAML-шаблон, используется шаблон из базы данных. Так можно переопределять встроенные команды без редактирования файлов плагина.
+If a database template has the same `vendor`, `platform`, `operation_type`, and `name` as a built-in template, the database template wins. This lets an operator override built-in behavior without editing plugin files.
 
-## Структура YAML-файла
+Run template sync from the NetBox app directory:
 
-Каждый файл производителя начинается с ключа `vendor` и списка `templates`:
+```bash
+cd /home/andrew/bsuir/diploma/netbox/netbox
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates
+```
+
+Dry run:
+
+```bash
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates --dry-run
+```
+
+## YAML Template Format
+
+Each vendor file starts with `vendor` and `templates`:
 
 ```yaml
 vendor: cisco
@@ -36,22 +49,20 @@ templates:
       no shutdown
 ```
 
-Обязательные поля:
+Required fields:
 
-- `name`: стабильное имя операции, которое используется в `NetworkTask.plan_yaml`;
-- `platform`: платформа из `DevicePlatformProfile`, например `cisco_ios` или `dlink_ds`;
-- `operation_type`: группа операции: `interface`, `vlan`, `ip` или `custom`;
-- `command_body`: одна или несколько CLI-команд, по одной команде на строку.
+- `name` - stable operation name used in YAML plans and parsed backups.
+- `platform` - platform from `DevicePlatformProfile`, for example `cisco_ios` or `dlink_ds`.
+- `operation_type` - operation group, such as `interface`, `vlan`, `ip`, `routing`, `security`, or `custom`.
+- `command_body` - one or more CLI commands.
 
-Рекомендуемые поля:
+Recommended fields:
 
-- `revision`: версия шаблона, увеличивай ее при изменениях;
-- `description`: короткое описание назначения шаблона;
-- `params`: список параметров, которые используются в `command_body`.
+- `revision` - increase when the template behavior changes.
+- `description` - short purpose statement.
+- `params` - placeholder names used by `command_body`.
 
-## Параметры шаблона
-
-В `command_body` используются плейсхолдеры в фигурных скобках:
+Placeholders use Python `str.format` style:
 
 ```yaml
 command_body: |
@@ -59,7 +70,7 @@ command_body: |
   description {description}
 ```
 
-Значения передаются из задачи:
+Input operation:
 
 ```yaml
 operations:
@@ -69,16 +80,53 @@ operations:
       description: uplink-to-core
 ```
 
-Если обязательного параметра нет, предпросмотр команд и выполнение задачи завершатся ошибкой до отправки команд на устройство.
+If a required placeholder is missing, preview and execution fail before commands are sent to the device.
 
-## Как добавить шаблон Cisco
+## Running-Config YAML And Sections
 
-Чтобы добавить шаблон Cisco, нужно добавить новый элемент в `cisco.yaml`:
+Raw running-config backups are converted into config-weaver YAML.
+
+Schema v2 preserves contextual sections:
+
+- `interface ...`
+- `line ...`
+- `router ...`
+- `ip access-list ...`
+- `ipv6 access-list ...`
+- `gatekeeper`
+- `control-plane`
+- other recognized Cisco blocks.
+
+This means child commands such as `shutdown`, `login`, `duplex half`, ACL entries, tunnel commands, and line settings remain attached to their parent section.
+
+Top-level `raw_commands` should contain only unmatched global commands. Section-specific unmatched commands belong in that section's `raw_commands`.
+
+## Cisco Coverage
+
+The Cisco catalog currently covers the main command families used by the tested running-config samples:
+
+- global hostname, password, service, CEF, IPv6, HTTP, CDP, and flow-export commands;
+- spanning-tree mode and VLAN priority;
+- interface IP, no IP address, NAT inside/outside, shutdown/no shutdown, duplex, speed;
+- switchport trunk native/allowed VLANs, encapsulation, trunk mode;
+- Port-channel membership with `channel-group`;
+- SVI MAC address, IPv4 address, and inbound ACL binding;
+- IPv6 address, IPv6 enable, tunnel source/mode/destination, IPv6 routes;
+- standard and extended named ACL entries;
+- static IPv4 routes and static NAT;
+- RIP router section;
+- console/aux/vty line password, login, transport, timeout, privilege, logging, and stopbits.
+
+Rare commands that do not need reuse can stay as `raw_commands`.
+
+## Adding A Cisco Template
+
+Add a new item to `cisco.yaml`:
 
 ```yaml
   - name: ospf_network
     platform: cisco_ios
-    operation_type: custom
+    operation_type: routing
     revision: 1
     description: Add an OSPF network statement.
     params: [process_id, network, wildcard, area]
@@ -87,7 +135,7 @@ operations:
       network {network} {wildcard} area {area}
 ```
 
-Чтобы использовать шаблон в задаче, нужно указать его в `NetworkTask.plan_yaml`:
+Use it in a task or backup YAML:
 
 ```yaml
 operations:
@@ -99,16 +147,16 @@ operations:
       area: 0
 ```
 
-Итоговые команды:
+Rendered commands:
 
 ```text
 router ospf 1
 network 10.0.0.0 0.0.0.255 area 0
 ```
 
-## Как добавить шаблон D-Link
+## Adding A D-Link Template
 
-Чтобы добавить шаблон D-Link, нужно добавить новый элемент в `dlink.yaml`:
+Add a new item to `dlink.yaml`:
 
 ```yaml
   - name: access_vlan_named
@@ -119,112 +167,23 @@ network 10.0.0.0 0.0.0.255 area 0
     params: [vlan_id, vlan_name, interface]
     command_body: |
       create vlan {vlan_name} tag {vlan_id}
-      config vlan vlanid {vlan_id} add untagged {interface}
-      config ports {interface} pvid {vlan_id}
+      config vlan {vlan_name} add untagged {interface}
 ```
 
-Чтобы использовать шаблон в задаче, нужно указать его в `NetworkTask.plan_yaml`:
+Then reference `access_vlan_named` from `NetworkTask.plan_yaml` or a rendered configuration YAML.
 
-```yaml
-operations:
-  - name: access_vlan_named
-    params:
-      vlan_id: 20
-      vlan_name: USERS
-      interface: 1:1
+## Validation Checklist
+
+After editing templates:
+
+```bash
+cd /home/andrew/bsuir/diploma/netbox/netbox
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates --dry-run
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_command_catalog --keepdb
 ```
 
-Итоговые команды:
+For parser/template interactions, also run the focused configuration refresh tests:
 
-```text
-create vlan USERS tag 20
-config vlan vlanid 20 add untagged 1:1
-config ports 1:1 pvid 20
+```bash
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_config_refresh --keepdb
 ```
-
-## Как добавить шаблон через NetBox UI
-
-Чтобы добавить команду, специфичную для лаборатории, или переопределить встроенный YAML-шаблон, нужно использовать UI:
-
-1. Открыть `Config Weaver`.
-2. Перейти в `Шаблоны команд`.
-3. Нажать `Добавить шаблон команд`.
-4. Заполнить поля:
-   - `name`;
-   - `vendor`;
-   - `platform`;
-   - `operation_type`;
-   - `command_body`;
-   - `is_active`.
-5. Сохранить шаблон.
-6. Открыть шаблон и нажать `Предпросмотр`, чтобы проверить параметры до запуска задачи.
-
-Пример шаблона через UI:
-
-```text
-name: loopback_ip
-vendor: cisco
-platform: cisco_ios
-operation_type: ip
-command_body:
-interface Loopback{number}
-ip address {ip} {mask}
-no shutdown
-```
-
-Использование в задаче:
-
-```yaml
-operations:
-  - name: loopback_ip
-    params:
-      number: 10
-      ip: 10.10.10.10
-      mask: 255.255.255.255
-```
-
-## Raw-команды
-
-`raw_commands` нужны для редких команд, для которых нет смысла создавать переиспользуемый шаблон:
-
-```yaml
-raw_commands:
-  - do show version
-  - do show ip interface brief
-```
-
-Raw-команды можно добавить и внутрь операции:
-
-```yaml
-operations:
-  - raw_commands: |
-      interface Loopback99
-      description temporary-test
-```
-
-Raw-команды все равно проходят через валидатор команд.
-
-## Правила безопасности
-
-Валидатор блокирует опасные команды для лабораторной автоматизации, включая:
-
-- `write erase`;
-- `erase startup-config`;
-- `delete flash:`;
-- `no username`;
-- `reload`;
-- `format flash`.
-
-Не добавлять разрушительные команды в YAML-файлы. Шаблоны должны описывать предсказуемые конфигурационные операции, которые безопасно просматривать и повторять.
-
-## Чеклист нового шаблона
-
-Перед сохранением или коммитом шаблона нужно:
-
-1. Выбрать стабильное и понятное `name`.
-2. Проверить, что `vendor` и `platform` совпадают с `DevicePlatformProfile`.
-3. Перечислить все плейсхолдеры в `params`.
-4. Писать одну CLI-команду на строку в `command_body`.
-5. Проверить шаблон через `Предпросмотр`.
-6. Проверить итоговые команды через preview задачи `NetworkTask`.
-7. Сначала запустить задачу на лабораторном устройстве, а не на реальном оборудовании.

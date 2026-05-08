@@ -1,8 +1,11 @@
+from dcim.models import Device
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, inline_serializer
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework import serializers
 from rest_framework.response import Response
-from dcim.models import Device
 
 from main.api.serializers import (
     CommandTemplateSerializer,
@@ -49,6 +52,22 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
     queryset = ConfigurationBackup.objects.all()
     serializer_class = ConfigurationBackupSerializer
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="device_id",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="NetBox device ID.",
+            ),
+        ],
+        responses={
+            200: ConfigurationBackupSerializer(many=True),
+            400: OpenApiResponse(description="device_id query parameter is required."),
+            404: OpenApiResponse(description="Device not found."),
+        },
+    )
     @action(detail=False, methods=['get'])
     def by_device(self, request):
         """List all saved configurations for a specific device."""
@@ -65,6 +84,40 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
         serializer = self.get_serializer(versions, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="from",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Source configuration backup ID.",
+            ),
+            OpenApiParameter(
+                name="to",
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="Target configuration backup ID.",
+            ),
+        ],
+        responses={
+            200: inline_serializer(
+                name="ConfigurationCompareResponse",
+                fields={
+                    "device_id": serializers.IntegerField(),
+                    "device_name": serializers.CharField(),
+                    "from_version": serializers.IntegerField(),
+                    "from_version_name": serializers.CharField(allow_blank=True, allow_null=True),
+                    "to_version": serializers.IntegerField(),
+                    "to_version_name": serializers.CharField(allow_blank=True, allow_null=True),
+                    "diff": serializers.ListField(child=serializers.CharField()),
+                },
+            ),
+            400: OpenApiResponse(description="Missing query parameters or versions from different devices."),
+            404: OpenApiResponse(description="One or both configurations not found."),
+        },
+    )
     @action(detail=False, methods=['get'])
     def compare(self, request):
         """Compare two configuration versions and return diff"""

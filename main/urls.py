@@ -1,6 +1,8 @@
 from django.urls import path
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from netbox.views.generic import ObjectChangeLogView
 
+from . import config as plugin_config
 from .models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -13,8 +15,30 @@ from .models import (
 from .presentation import views
 
 urlpatterns = [
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(
+            urlconf="main.api.schema_urls",
+            custom_settings={
+                "TITLE": "config-weaver API",
+                "VERSION": plugin_config.version,
+            },
+        ),
+        name="swagger_schema",
+    ),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(
+            url_name="plugins:main:swagger_schema",
+            title="config-weaver API",
+        ),
+        name="swagger_ui",
+    ),
+
     path("credentials/", views.DeviceCredentialListView.as_view(), name="devicecredential_list"),
     path("credentials/add/", views.DeviceCredentialEditView.as_view(), name="devicecredential_add"),
+    path("credentials/edit/", views.DeviceCredentialBulkEditView.as_view(), name="devicecredential_bulk_edit"),
+    path("credentials/delete/", views.DeviceCredentialBulkDeleteView.as_view(), name="devicecredential_bulk_delete"),
     path("credentials/<int:pk>/", views.DeviceCredentialView.as_view(), name="devicecredential"),
     path("credentials/<int:pk>/reveal/", views.DeviceCredentialRevealView.as_view(), name="devicecredential_reveal"),
     path("credentials/<int:pk>/edit/", views.DeviceCredentialEditView.as_view(), name="devicecredential_edit"),
@@ -28,6 +52,8 @@ urlpatterns = [
 
     path("devices/", views.DevicePlatformProfileListView.as_view(), name="deviceplatformprofile_list"),
     path("devices/add/", views.DevicePlatformProfileEditView.as_view(), name="deviceplatformprofile_add"),
+    path("devices/edit/", views.DevicePlatformProfileBulkEditView.as_view(), name="deviceplatformprofile_bulk_edit"),
+    path("devices/delete/", views.DevicePlatformProfileBulkDeleteView.as_view(), name="deviceplatformprofile_bulk_delete"),
     path("devices/<int:pk>/", views.DevicePlatformProfileView.as_view(), name="deviceplatformprofile"),
     path("devices/<int:pk>/cli/", views.DevicePlatformProfileCLIView.as_view(), name="deviceplatformprofile_cli"),
     path("devices/<int:pk>/versions/", views.DevicePlatformProfileVersionsView.as_view(), name="deviceplatformprofile_versions"),
@@ -57,6 +83,8 @@ urlpatterns = [
 
     path("templates/", views.CommandTemplateListView.as_view(), name="commandtemplate_list"),
     path("templates/add/", views.CommandTemplateEditView.as_view(), name="commandtemplate_add"),
+    path("templates/edit/", views.CommandTemplateBulkEditView.as_view(), name="commandtemplate_bulk_edit"),
+    path("templates/delete/", views.CommandTemplateBulkDeleteView.as_view(), name="commandtemplate_bulk_delete"),
     path("templates/<int:pk>/", views.CommandTemplateView.as_view(), name="commandtemplate"),
     path("templates/<int:pk>/edit/", views.CommandTemplateEditView.as_view(), name="commandtemplate_edit"),
     path("templates/<int:pk>/preview/", views.CommandTemplatePreviewView.as_view(), name="commandtemplate_preview"),
@@ -82,6 +110,8 @@ urlpatterns = [
 
     path("configurations/", views.ConfigurationBackupListView.as_view(), name="configurationbackup_list"),
     path("configurations/add/", views.ConfigurationBackupEditView.as_view(), name="configurationbackup_add"),
+    path("configurations/edit/", views.ConfigurationBackupBulkEditView.as_view(), name="configurationbackup_bulk_edit"),
+    path("configurations/delete/", views.ConfigurationBackupBulkDeleteView.as_view(), name="configurationbackup_bulk_delete"),
     path("configurations/<int:pk>/", views.ConfigurationBackupView.as_view(), name="configurationbackup"),
     path("configurations/<int:pk>/yaml/", views.ConfigurationBackupYAMLView.as_view(), name="configurationbackup_yaml"),
     path("configurations/<int:pk>/edit/", views.ConfigurationBackupEditView.as_view(), name="configurationbackup_edit"),
@@ -105,6 +135,8 @@ urlpatterns = [
 
     path("tasks/", views.ScheduledTaskListView.as_view(), name="scheduledtask_list"),
     path("tasks/add/", views.ScheduledTaskEditView.as_view(), name="scheduledtask_add"),
+    path("tasks/edit/", views.ScheduledTaskBulkEditView.as_view(), name="scheduledtask_bulk_edit"),
+    path("tasks/delete/", views.ScheduledTaskBulkDeleteView.as_view(), name="scheduledtask_bulk_delete"),
     path("tasks/<int:pk>/", views.ScheduledTaskView.as_view(), name="scheduledtask"),
     path("tasks/<int:pk>/edit/", views.ScheduledTaskEditView.as_view(), name="scheduledtask_edit"),
     path("tasks/<int:pk>/delete/", views.ScheduledTaskDeleteView.as_view(), name="scheduledtask_delete"),

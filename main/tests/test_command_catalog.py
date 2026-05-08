@@ -16,6 +16,9 @@ class CommandCatalogLoaderTests(TestCase):
         keys = {(template.vendor, template.platform, template.name) for template in templates}
 
         self.assertIn(("cisco", "cisco_ios", "interface_l3"), keys)
+        self.assertIn(("cisco", "cisco_ios", "switchport_trunk_native_vlan"), keys)
+        self.assertIn(("cisco", "cisco_ios", "ipv6_route"), keys)
+        self.assertIn(("cisco", "cisco_ios", "line_login"), keys)
         self.assertIn(("dlink", "dlink_ds", "vlan_create"), keys)
 
     def test_database_template_overrides_catalog_template(self):

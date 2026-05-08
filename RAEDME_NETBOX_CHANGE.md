@@ -2,50 +2,94 @@
 
 ## Главное правило
 
-Для нормальной работы модуля не нужно изменять основной код NetBox. Нужно держать все изменения внутри плагина `config-weaver`, конфигурации NetBox и локальных команд запуска.
+Для работы `config-weaver` не нужно менять core-код NetBox.
 
-## Что нужно настроить в NetBox
+Допустимые точки интеграции:
 
-Чтобы подключить модуль, нужно изменить только конфигурацию NetBox:
+- `configuration.py` NetBox;
+- установка Python-пакета плагина;
+- локальные команды запуска;
+- reverse proxy / systemd / cron в production.
+
+Файлы NetBox core менять не нужно:
+
+- `netbox/netbox/settings.py`;
+- `netbox/netbox/urls.py`;
+- `netbox/dcim/*`;
+- `netbox/templates/*`;
+- другие upstream-файлы NetBox.
+
+Если будущая функция действительно потребует core-diff, сначала нужно описать причину, альтернативы и минимальный diff в этом документе.
+
+## Подключение Плагина
+
+Добавить в NetBox `configuration.py`:
 
 ```python
 PLUGINS = ["main"]
 
 PLUGINS_CONFIG = {
     "main": {
-        "secret_key": "config-weaver-local-development-secret",
+        "secret_key": "replace-with-a-long-random-plugin-secret",
         "vcs_repo_path": "/home/andrew/bsuir/diploma/config-weaver-vcs",
         "scheduler_max_workers": 8,
     }
 }
 ```
 
-Также нужно настроить стандартные для NetBox зависимости:
+Важно:
 
-- PostgreSQL в `DATABASES`;
-- Redis в `REDIS['tasks']` и `REDIS['caching']`;
-- `SECRET_KEY` и `API_TOKEN_PEPPERS`.
+- `main` - имя Django app/plugin config.
+- `config-weaver` - публичный `base_url` плагина.
+- UI routes находятся под `/plugins/config-weaver/`.
+- REST API находится под `/api/plugins/config-weaver/`.
 
-Эти настройки являются конфигурацией инсталляции, а не изменением core-кода NetBox.
+Полный пример конфигурации: `examples/netbox_plugin_configuration.py`.
 
-## Что не нужно менять
+## Актуальные URL
 
-Не нужно править файлы NetBox core:
+UI:
 
-- `netbox/netbox/settings.py`;
-- `netbox/netbox/urls.py`;
-- `netbox/netbox/views/*`;
-- `netbox/dcim/*`;
-- `netbox/templates/*`;
-- другие файлы приложения NetBox.
+```text
+/plugins/config-weaver/devices/
+/plugins/config-weaver/credentials/
+/plugins/config-weaver/configurations/
+/plugins/config-weaver/tasks/
+/plugins/config-weaver/templates/
+/plugins/config-weaver/uml/
+```
 
-Если для новой функции появляется необходимость менять core-код NetBox, сначала нужно описать причину, альтернативы и минимальный diff в этом файле. Без такого описания менять NetBox core нельзя.
+REST API:
 
-## Нюанс WebSocket-терминала
+```text
+/api/plugins/config-weaver/devices/
+/api/plugins/config-weaver/credentials/
+/api/plugins/config-weaver/configurations/
+/api/plugins/config-weaver/tasks/
+/api/plugins/config-weaver/templates/
+/api/plugins/config-weaver/uml-configurations/
+```
 
-Ручной терминал config-weaver работает через WebSocket и Channels. Обычный WSGI-запуск NetBox через `manage.py runserver` не обрабатывает `/ws/plugins/config-weaver/devices/<pk>/terminal/`.
+Swagger:
 
-Чтобы запустить терминал локально, нужно использовать ASGI entrypoint плагина:
+```text
+/plugins/config-weaver/api/docs/
+/plugins/config-weaver/api/schema/
+```
+
+WebSocket terminal:
+
+```text
+/ws/plugins/config-weaver/devices/<profile_id>/terminal/
+```
+
+## ASGI И Терминал
+
+Ручной терминал работает через WebSocket и Channels.
+
+`manage.py runserver` обслуживает WSGI/HTTP и не должен использоваться для проверки терминала.
+
+Локально нужно запускать:
 
 ```bash
 cd /home/andrew/bsuir/diploma
@@ -58,17 +102,15 @@ make run
 make run-web
 ```
 
-Этот запуск использует `main.asgi:application` из плагина. Внутри него:
+Этот запуск использует `main.asgi:application` из плагина:
 
 - HTTP-запросы передаются в стандартный Django ASGI app NetBox;
-- `/ws/...` передается в Channels `URLRouter`;
-- локальная статика отдается через `ASGIStaticFilesHandler`.
+- `/ws/...` передается в Channels router;
+- локальная статика отдается через ASGI static handler.
 
-Такой подход позволяет не менять `netbox/netbox/urls.py` и `netbox/netbox/settings.py`.
+Такой подход оставляет маршрутизацию внутри плагина и не требует правок `netbox/netbox/urls.py`.
 
 ## Диагностика WebSocket
-
-Чтобы проверить routing без браузера, нужно выполнить:
 
 ```bash
 curl -i -N \
@@ -81,10 +123,10 @@ curl -i -N \
 
 Ожидаемые признаки:
 
-- `403 Access denied` без cookie сессии - ASGI route работает, но пользователь не авторизован;
-- `404 Not Found` от `WSGIServer` - запущен WSGI `runserver`, нужно перейти на `make run`;
-- `Connection refused` - web-процесс не слушает порт;
-- `400 bad Sec-WebSocket-Key` - тестовый WebSocket-заголовок некорректен.
+- `403 Access denied` без cookie сессии - ASGI route работает, пользователь не авторизован.
+- `404 Not Found` от `WSGIServer` - запущен WSGI `runserver`; нужно использовать `make run` или `make run-web`.
+- `Connection refused` - web-процесс не слушает порт.
+- `400 bad Sec-WebSocket-Key` - некорректный тестовый WebSocket-заголовок.
 
 ## Production
 
@@ -92,11 +134,11 @@ curl -i -N \
 
 1. Раздавать `STATIC_ROOT` через nginx или другой HTTP-сервер.
 2. Проксировать обычный HTTP в backend NetBox.
-3. Проксировать `/ws/` в ASGI backend с WebSocket upgrade-заголовками.
-4. Запустить отдельный NetBox RQ worker.
+3. Проксировать `/ws/` в ASGI backend с WebSocket upgrade headers.
+4. Запустить NetBox RQ worker.
 5. Запустить `run_due_tasks` через cron, systemd timer или отдельный service loop.
 
-Пример обязательных nginx-заголовков для `/ws/`:
+Минимальные nginx headers для `/ws/`:
 
 ```nginx
 proxy_http_version 1.1;

@@ -34,7 +34,8 @@ class _CompiledTemplate:
 
 
 class ConfigurationYamlService:
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
+    SUPPORTED_SCHEMA_VERSIONS = {1, 2}
 
     @staticmethod
     def dump_yaml(payload: dict[str, Any]) -> str:
@@ -52,7 +53,7 @@ class ConfigurationYamlService:
             data = yaml.safe_load(value) or {}
         except yaml.YAMLError:
             return False
-        return isinstance(data, dict) and data.get("schema_version") == cls.SCHEMA_VERSION
+        return isinstance(data, dict) and data.get("schema_version") in cls.SUPPORTED_SCHEMA_VERSIONS
 
     @classmethod
     def checksum(cls, yaml_text: str) -> str:
@@ -78,6 +79,87 @@ class ConfigurationYamlService:
                 continue
             lines.append(normalized)
         return lines
+
+    @classmethod
+    def _config_records(cls, raw_config: str) -> list[dict[str, Any]]:
+        ignored_prefixes = (
+            "building configuration",
+            "current configuration",
+            "end",
+        )
+        records: list[dict[str, Any]] = []
+        for line in raw_config.splitlines():
+            normalized = cls._normalize_line(line)
+            if not normalized:
+                continue
+            if any(normalized.lower().startswith(prefix) for prefix in ignored_prefixes):
+                continue
+            if set(normalized) == {"!"}:
+                records.append({"separator": True})
+                continue
+            records.append(
+                {
+                    "separator": False,
+                    "line": normalized,
+                    "indented": bool(line[:1].isspace()),
+                }
+            )
+        return records
+
+    @staticmethod
+    def _is_section_header(line: str) -> bool:
+        lower = line.lower()
+        exact_headers = {
+            "control-plane",
+            "gatekeeper",
+            "redundancy",
+        }
+        prefixes = (
+            "interface ",
+            "ip access-list ",
+            "ipv6 access-list ",
+            "router ",
+            "line ",
+            "mgcp profile ",
+            "vlan ",
+            "ip dhcp pool ",
+            "route-map ",
+            "policy-map ",
+            "class-map ",
+        )
+        return lower in exact_headers or lower.startswith(prefixes)
+
+    @classmethod
+    def _split_config_sections(cls, raw_config: str) -> tuple[list[str], list[dict[str, Any]]]:
+        global_lines: list[str] = []
+        sections: list[dict[str, Any]] = []
+        current: dict[str, Any] | None = None
+
+        for record in cls._config_records(raw_config):
+            if record["separator"]:
+                if current is not None:
+                    sections.append(current)
+                    current = None
+                continue
+
+            line = record["line"]
+            if current is None:
+                if cls._is_section_header(line):
+                    current = {"header": line, "lines": []}
+                else:
+                    global_lines.append(line)
+                continue
+
+            if not record["indented"] and cls._is_section_header(line):
+                sections.append(current)
+                current = {"header": line, "lines": []}
+            else:
+                current["lines"].append(line)
+
+        if current is not None:
+            sections.append(current)
+
+        return global_lines, sections
 
     @classmethod
     def _line_pattern(cls, template_line: str) -> tuple[re.Pattern, tuple[str, ...]]:
@@ -144,6 +226,76 @@ class ConfigurationYamlService:
         return params
 
     @classmethod
+    def _operation_from_template(cls, template: _CompiledTemplate, params: dict[str, str]) -> dict[str, Any]:
+        return {
+            "name": template.template.name,
+            "operation_type": template.template.operation_type,
+            "params": params,
+        }
+
+    @classmethod
+    def _parse_operations(
+        cls,
+        lines: list[str],
+        templates: list[_CompiledTemplate],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        operations: list[dict[str, Any]] = []
+        raw_commands: list[str] = []
+        index = 0
+
+        while index < len(lines):
+            matched = False
+            for template in templates:
+                params = cls._match_template(lines, index, template)
+                if params is None:
+                    continue
+                operations.append(cls._operation_from_template(template, params))
+                index += len(template.line_patterns)
+                matched = True
+                break
+            if not matched:
+                raw_commands.append(lines[index])
+                index += 1
+
+        return operations, raw_commands
+
+    @classmethod
+    def _parse_section(
+        cls,
+        header: str,
+        lines: list[str],
+        templates: list[_CompiledTemplate],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        operations: list[dict[str, Any]] = []
+        raw_commands: list[str] = []
+
+        if not lines:
+            for template in templates:
+                params = cls._match_template([header], 0, template)
+                if params is not None:
+                    return [cls._operation_from_template(template, params)], []
+            return [], []
+
+        index = 0
+        while index < len(lines):
+            matched = False
+            for template in templates:
+                if len(template.line_patterns) < 2:
+                    continue
+                params = cls._match_template([header, *lines[index:]], 0, template)
+                if params is None:
+                    continue
+                operations.append(cls._operation_from_template(template, params))
+                index += len(template.line_patterns) - 1
+                matched = True
+                break
+            if not matched:
+                raw_commands.append(lines[index])
+                index += 1
+
+        return operations, raw_commands
+
+    @classmethod
     def running_config_to_payload(
         cls,
         device,
@@ -151,31 +303,20 @@ class ConfigurationYamlService:
         source: str = "runtime",
     ) -> dict[str, Any]:
         profile = DevicePlatformProfile.objects.filter(device=device, enabled=True).first()
-        lines = cls._config_lines(redact_secrets(raw_config))
+        redacted_config = redact_secrets(raw_config)
+        global_lines, config_sections = cls._split_config_sections(redacted_config)
         templates = cls._compile_templates(profile)
-        operations: list[dict[str, Any]] = []
-        raw_commands: list[str] = []
+        operations, raw_commands = cls._parse_operations(global_lines, templates)
+        sections: list[dict[str, Any]] = []
 
-        index = 0
-        while index < len(lines):
-            matched = False
-            for template in templates:
-                params = cls._match_template(lines, index, template)
-                if params is None:
-                    continue
-                operations.append(
-                    {
-                        "name": template.template.name,
-                        "operation_type": template.template.operation_type,
-                        "params": params,
-                    }
-                )
-                index += len(template.line_patterns)
-                matched = True
-                break
-            if not matched:
-                raw_commands.append(lines[index])
-                index += 1
+        for section in config_sections:
+            section_operations, section_raw = cls._parse_section(section["header"], section["lines"], templates)
+            section_payload: dict[str, Any] = {
+                "header": section["header"],
+                "operations": section_operations,
+                "raw_commands": section_raw,
+            }
+            sections.append(section_payload)
 
         return {
             "schema_version": cls.SCHEMA_VERSION,
@@ -187,6 +328,7 @@ class ConfigurationYamlService:
             "source": source,
             "saved_at": timezone.now().isoformat(),
             "operations": operations,
+            "sections": sections,
             "raw_commands": raw_commands,
         }
 
@@ -200,9 +342,17 @@ class ConfigurationYamlService:
             data = yaml.safe_load(yaml_text) or {}
         except yaml.YAMLError as exc:
             raise ConfigValidationError(f"Invalid configuration YAML: {exc}") from exc
-        if not isinstance(data, dict) or data.get("schema_version") != cls.SCHEMA_VERSION:
+        if not isinstance(data, dict) or data.get("schema_version") not in cls.SUPPORTED_SCHEMA_VERSIONS:
             raise ConfigValidationError("Unsupported configuration YAML schema")
         return data
+
+    @classmethod
+    def _operations_to_commands(cls, operations: list[dict[str, Any]], profile: DevicePlatformProfile) -> list[str]:
+        return CommandGenerator.generate_commands(
+            {"operations": operations},
+            ConfigurationRepository.active_templates(),
+            profile,
+        )
 
     @classmethod
     def yaml_to_commands(cls, yaml_text: str, profile: DevicePlatformProfile) -> list[str]:
@@ -213,12 +363,25 @@ class ConfigurationYamlService:
                 if line.strip() and not line.strip().startswith("!")
             ]
         payload = cls.load_payload(yaml_text)
-        plan = {
-            "operations": payload.get("operations") or [],
-            "raw_commands": payload.get("raw_commands") or [],
-        }
-        return CommandGenerator.generate_commands(
-            plan,
-            ConfigurationRepository.active_templates(),
-            profile,
-        )
+        if payload.get("schema_version") == 1:
+            plan = {
+                "operations": payload.get("operations") or [],
+                "raw_commands": payload.get("raw_commands") or [],
+            }
+            return CommandGenerator.generate_commands(
+                plan,
+                ConfigurationRepository.active_templates(),
+                profile,
+            )
+
+        commands = cls._operations_to_commands(payload.get("operations") or [], profile)
+        commands.extend(payload.get("raw_commands") or [])
+        for section in payload.get("sections") or []:
+            section_operations = section.get("operations") or []
+            section_raw = section.get("raw_commands") or []
+            if section_operations:
+                commands.extend(cls._operations_to_commands(section_operations, profile))
+            if section_raw:
+                commands.append(section["header"])
+                commands.extend(section_raw)
+        return commands
