@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 import hashlib
 
+from dcim.models import Device
 from django.conf import settings
 from django.core.cache import cache
 from django.db import close_old_connections
@@ -42,50 +43,68 @@ class TaskExecutor:
         if cached is not None:
             return cached
 
-        plan = NetworkPlanParser.normalize_interfaces(NetworkPlanParser.parse_plan(task.task))
-        commands = CommandGenerator.generate_commands(plan, ConfigurationRepository.active_templates(), profile)
+        commands = TaskExecutor.commands_for_yaml(task.target_device, profile, task.task)
+        cache.set(cache_key, commands, timeout=120)
+        return commands
+
+    @staticmethod
+    def commands_for_yaml(device: Device, profile: DevicePlatformProfile, yaml_text: str) -> list[str]:
+        if ConfigurationYamlService.is_yaml_config(yaml_text):
+            commands = ConfigurationYamlService.yaml_to_commands(yaml_text, profile)
+        else:
+            plan = NetworkPlanParser.normalize_interfaces(NetworkPlanParser.parse_plan(yaml_text))
+            commands = CommandGenerator.generate_commands(plan, ConfigurationRepository.active_templates(), profile)
         commands = ConnectionSession.with_save_command(commands, profile.platform)
 
         valid, errors = ConfigurationValidator.validate_commands(commands)
         if not valid:
             raise ConfigValidationError("; ".join(errors))
 
-        cache.set(cache_key, commands, timeout=120)
         return commands
 
     @staticmethod
-    def _apply_commands(profile: DevicePlatformProfile, task: ScheduledTask, commands: list[str]) -> str:
+    def _apply_device_commands(
+        device: Device,
+        profile: DevicePlatformProfile,
+        commands: list[str],
+        target_backup=None,
+        log_context: str = "",
+    ) -> str:
         logger.info(
             "Applying command scenario %s command_count=%s %s",
-            task_log_context(task),
+            log_context,
             len(commands),
-            device_log_context(task.target_device, profile),
+            device_log_context(device, profile),
         )
-        session, _profile, _check = connect_device_cli(task.target_device, verify_saved_config=True)
+        session, _profile, _check = connect_device_cli(device, verify_saved_config=True)
         try:
-            before_config = session.get_running_config()
-            before_backup = ConfigurationVCS.write_backup(
-                task.target_device,
-                before_config,
-                task=task,
-                source="pre_apply",
-            )
-            logger.info(
-                "Pre-apply configuration backup created %s task_id=%s backup_id=%s version=%s",
-                device_log_context(task.target_device, profile),
-                task.pk,
-                before_backup.pk,
-                before_backup.version,
-            )
             session.send_config_set(commands)
             running = session.get_running_config()
         finally:
             session.disconnect()
 
-        configuration = ConfigurationVCS.write_backup(task.target_device, running, task=None, source="runtime")
+        if target_backup and ConfigurationYamlService.backup_matches_running_config(
+            device,
+            target_backup.config_text,
+            running,
+            source="gitlab_apply",
+        ):
+            logger.info(
+                "Command scenario applied without new version %s command_count=%s target_backup_id=%s target_version=%s",
+                log_context,
+                len(commands),
+                target_backup.pk,
+                target_backup.version,
+            )
+            return (
+                f"Сценарий применен через {profile.platform}; "
+                f"текущая конфигурация совпадает с v{target_backup.version}, новая версия не создана"
+            )
+
+        configuration = ConfigurationVCS.write_backup(device, running, task=None, source="runtime")
         logger.info(
             "Command scenario applied %s command_count=%s configuration_version=%s backup_id=%s",
-            task_log_context(task),
+            log_context,
             len(commands),
             configuration.version,
             configuration.pk,
@@ -93,6 +112,65 @@ class TaskExecutor:
         return (
             f"Сценарий применен через {profile.platform}; "
             f"создана конфигурация v{configuration.version}"
+        )
+
+    @staticmethod
+    def _apply_commands(profile: DevicePlatformProfile, task: ScheduledTask, commands: list[str]) -> str:
+        gitlab_mapping = task.gitlab_mappings.select_related("configuration_backup").first()
+        target_backup = (
+            gitlab_mapping.configuration_backup
+            if gitlab_mapping and gitlab_mapping.configuration_backup_id
+            else None
+        )
+        return TaskExecutor._apply_device_commands(
+            task.target_device,
+            profile,
+            commands,
+            target_backup=target_backup,
+            log_context=task_log_context(task),
+        )
+
+    @classmethod
+    def apply_yaml_to_device(cls, device: Device, yaml_text: str, target_backup=None) -> str:
+        profile = DeviceConnectionManager.get_profile(device)
+        if not profile:
+            raise ConfigValidationError(f"No active device profile for {device.name}")
+        commands = cls.commands_for_yaml(device, profile, yaml_text)
+        return cls._apply_device_commands(
+            device,
+            profile,
+            commands,
+            target_backup=target_backup,
+            log_context=f"gitlab_backup_id={getattr(target_backup, 'pk', None)}",
+        )
+
+    @classmethod
+    def apply_backup_to_device(cls, backup) -> str:
+        profile = DeviceConnectionManager.get_profile(backup.device)
+        if not profile:
+            raise ConfigValidationError(f"No active device profile for {backup.device.name}")
+        commands = cls.commands_for_yaml(backup.device, profile, backup.config_text)
+        logger.info(
+            "Applying GitLab configuration backup %s command_count=%s backup_id=%s version=%s",
+            device_log_context(backup.device, profile),
+            len(commands),
+            backup.pk,
+            backup.version,
+        )
+        session, _profile, _check = connect_device_cli(backup.device, verify_saved_config=True)
+        try:
+            session.send_config_set(commands)
+        finally:
+            session.disconnect()
+        logger.info(
+            "GitLab configuration backup sent to device %s backup_id=%s version=%s",
+            device_log_context(backup.device, profile),
+            backup.pk,
+            backup.version,
+        )
+        return (
+            f"GitLab configuration v{backup.version} sent to device; "
+            "GitLab version remains current"
         )
 
     @classmethod

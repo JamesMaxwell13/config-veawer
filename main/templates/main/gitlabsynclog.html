@@ -7,3 +7,85 @@
     <span class="text-muted ms-3">File:</span> <code>{{ object.file_path }}</code>
   </div>
 {% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  <div class="card mt-3">
+    <h5 class="card-header">Sync log</h5>
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">ID</dt>
+        <dd class="col-sm-9">{{ object.pk }}</dd>
+
+        <dt class="col-sm-3">GitLab integration</dt>
+        <dd class="col-sm-9"><a href="{{ object.integration.get_absolute_url }}">{{ object.integration }}</a></dd>
+
+        <dt class="col-sm-3">Mapping</dt>
+        <dd class="col-sm-9">
+          {% if object.mapping %}
+            <a href="{{ object.mapping.get_absolute_url }}">{{ object.mapping }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Device</dt>
+        <dd class="col-sm-9">
+          {% if object.device %}
+            <a href="{{ object.device.get_absolute_url }}">{{ object.device }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Configuration backup</dt>
+        <dd class="col-sm-9">
+          {% if object.configuration_backup %}
+            <a href="{{ object.configuration_backup.get_absolute_url }}">{{ object.configuration_backup }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Task</dt>
+        <dd class="col-sm-9">
+          {% if object.task %}
+            <a href="{{ object.task.get_absolute_url }}">{{ object.task }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Direction</dt>
+        <dd class="col-sm-9">{{ object.direction }}</dd>
+
+        <dt class="col-sm-3">Status</dt>
+        <dd class="col-sm-9">{{ object.status }}</dd>
+
+        <dt class="col-sm-3">File path</dt>
+        <dd class="col-sm-9"><code>{{ object.file_path|default:"-" }}</code></dd>
+
+        <dt class="col-sm-3">Commit SHA</dt>
+        <dd class="col-sm-9">
+          {% if object.commit_sha %}
+            <code title="{{ object.commit_sha }}">{{ object.commit_sha }}</code>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Created</dt>
+        <dd class="col-sm-9">{{ object.created }}</dd>
+
+        <dt class="col-sm-3">Message</dt>
+        <dd class="col-sm-9">
+          {% if object.message %}
+            <div class="mb-0 text-body" style="white-space: pre-wrap;">{{ object.message }}</div>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+{% endblock %}

@@ -1,14 +1,26 @@
 from datetime import timedelta
 from io import StringIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
+from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from main.application.tasks import TaskExecutor
 from main.domain.configuration import ConfigValidationError
-from main.models import ScheduledTask
+from main.infrastructure.vcs import ConfigurationVCS
+from main.models import ConfigurationBackup, DeviceCredential, DevicePlatformProfile, ScheduledTask
+
+
+def create_device(name="scheduled-r1"):
+    manufacturer = Manufacturer.objects.create(name=f"{name} manufacturer", slug=f"{name}-manufacturer")
+    device_type = DeviceType.objects.create(manufacturer=manufacturer, model=f"{name} type", slug=f"{name}-type")
+    role = DeviceRole.objects.create(name=f"{name} role", slug=f"{name}-role")
+    site = Site.objects.create(name=f"{name} site", slug=f"{name}-site")
+    return Device.objects.create(site=site, device_type=device_type, role=role, name=name)
 
 
 class ScheduledTaskLogicTests(TestCase):
@@ -101,3 +113,48 @@ class ScheduledTaskLogicTests(TestCase):
 
         with self.assertRaisesMessage(ConfigValidationError, "YAML task is required"):
             TaskExecutor.preview_commands(task)
+
+    def test_apply_scenario_creates_runtime_backup_without_pre_apply(self):
+        device = create_device()
+        credential = DeviceCredential.objects.create(
+            name="scheduled-credential",
+            username="admin",
+            password="password",
+        )
+        profile = DevicePlatformProfile.objects.create(
+            device=device,
+            credential=credential,
+            vendor=DevicePlatformProfile.VENDOR_CISCO,
+            platform=DevicePlatformProfile.PLATFORM_CISCO_IOS,
+            management_ip="192.0.2.10",
+            enabled=True,
+        )
+        task = ScheduledTask.objects.create(
+            task_name="GitLab apply R1",
+            task_type=ScheduledTask.TYPE_APPLY_SCENARIO,
+            target_device=device,
+            schedule_time=timezone.now(),
+            status=ScheduledTask.STATUS_PENDING,
+            task="hostname scheduled-r1",
+        )
+        session = MagicMock()
+        session.get_running_config.side_effect = [
+            "hostname scheduled-r1-before",
+            "hostname scheduled-r1-after",
+        ]
+
+        with TemporaryDirectory() as tmpdir:
+            with (
+                patch("main.application.tasks.connect_device_cli", return_value=(session, profile, {"checked": False})),
+                patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
+                patch("main.infrastructure.vcs.subprocess.run"),
+                patch("main.infrastructure.vcs.subprocess.check_output", return_value=b"abc123\n"),
+            ):
+                result = TaskExecutor._apply_commands(profile, task, ["hostname scheduled-r1-after"])
+
+        self.assertIn("Сценарий применен", result)
+        session.send_config_set.assert_called_once_with(["hostname scheduled-r1-after"])
+        self.assertEqual(ConfigurationBackup.objects.filter(device=device).count(), 1)
+        self.assertFalse(ConfigurationBackup.objects.filter(device=device, source="pre_apply").exists())
+        runtime_backup = ConfigurationBackup.objects.get(device=device, source="runtime")
+        self.assertIsNone(runtime_backup.task)

@@ -26,7 +26,7 @@
     </form>
 
     <table class="table table-hover">
-      <thead><tr><th></th><th>Версия</th><th>Название</th><th>Дата</th><th>Checksum</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Версия</th><th>Название</th><th>Source</th><th>Дата</th><th>Checksum</th><th></th></tr></thead>
       <tbody>
       {% for v in versions %}
         <tr>
@@ -39,7 +39,10 @@
               <span class="badge text-bg-success ms-1">Текущая</span>
             {% endif %}
           </td>
-          <td>{{ v.version_name|default:'-' }}</td>
+          <td>
+            <a href="{{ v.get_absolute_url }}">{{ v.version_name|default:'-' }}</a>
+          </td>
+          <td>{{ v.source|default:'-' }}</td>
           <td>{{ v.created }}</td>
           <td>
             {% if v.config_checksum %}
@@ -63,7 +66,7 @@
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="6" class="text-muted">Конфигураций пока нет.</td></tr>
+        <tr><td colspan="7" class="text-muted">Конфигураций пока нет.</td></tr>
       {% endfor %}
       </tbody>
     </table>

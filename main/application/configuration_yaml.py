@@ -64,35 +64,37 @@ class ConfigurationYamlService:
         return re.sub(r"\s+", " ", line.strip())
 
     @classmethod
-    def _config_lines(cls, raw_config: str) -> list[str]:
+    def _is_ignored_config_line(cls, normalized: str) -> bool:
+        lower = normalized.lower()
         ignored_prefixes = (
             "building configuration",
             "current configuration",
             "end",
+            "! last configuration change at ",
+            "! nvram config last updated at ",
         )
+        return any(lower.startswith(prefix) for prefix in ignored_prefixes)
+
+    @classmethod
+    def _config_lines(cls, raw_config: str) -> list[str]:
         lines: list[str] = []
         for line in raw_config.splitlines():
             normalized = cls._normalize_line(line)
             if not normalized or normalized == "!":
                 continue
-            if any(normalized.lower().startswith(prefix) for prefix in ignored_prefixes):
+            if cls._is_ignored_config_line(normalized):
                 continue
             lines.append(normalized)
         return lines
 
     @classmethod
     def _config_records(cls, raw_config: str) -> list[dict[str, Any]]:
-        ignored_prefixes = (
-            "building configuration",
-            "current configuration",
-            "end",
-        )
         records: list[dict[str, Any]] = []
         for line in raw_config.splitlines():
             normalized = cls._normalize_line(line)
             if not normalized:
                 continue
-            if any(normalized.lower().startswith(prefix) for prefix in ignored_prefixes):
+            if cls._is_ignored_config_line(normalized):
                 continue
             if set(normalized) == {"!"}:
                 records.append({"separator": True})
@@ -349,9 +351,28 @@ class ConfigurationYamlService:
     @classmethod
     def comparable_payload(cls, yaml_text: str) -> dict[str, Any]:
         payload = cls.load_payload(yaml_text)
-        payload.pop("saved_at", None)
-        payload.pop("source", None)
-        return payload
+        return cls._strip_comparison_metadata(payload)
+
+    @classmethod
+    def _strip_comparison_metadata(cls, value):
+        ignored_keys = {
+            "source",
+            "saved_at",
+            "created_at",
+            "updated_at",
+            "last_updated",
+            "last_checked_at",
+            "timestamp",
+        }
+        if isinstance(value, dict):
+            return {
+                key: cls._strip_comparison_metadata(item)
+                for key, item in value.items()
+                if key not in ignored_keys
+            }
+        if isinstance(value, list):
+            return [cls._strip_comparison_metadata(item) for item in value]
+        return value
 
     @classmethod
     def configs_equivalent(cls, first: str, second: str) -> bool:

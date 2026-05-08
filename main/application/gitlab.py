@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..application.configuration_yaml import ConfigurationYamlService
+from ..application.tasks import TaskExecutor
 from ..domain.configuration import ConfigValidationError, NetworkPlanParser
 from ..infrastructure.gitlab import (
     GitLabAPIError,
@@ -15,6 +16,9 @@ from ..infrastructure.gitlab import (
     GitLabNotFoundError,
     GitLabPathBuilder,
 )
+from ..infrastructure.network import connect_device_cli
+from ..infrastructure.repositories import ConfigurationRepository
+from ..infrastructure.vcs import ConfigurationVCS
 from ..logging import device_log_context, logger
 from ..models import (
     ConfigurationBackup,
@@ -272,6 +276,11 @@ class GitLabIntegrationService:
         try:
             yaml_text = client.get_raw_file(integration.project_id, file_path, ref)
             cls._validate_yaml(yaml_text)
+            if not commit_sha:
+                try:
+                    commit_sha = client.get_file_metadata(integration.project_id, file_path, ref).last_commit_id
+                except GitLabAPIError:
+                    pass
         except Exception as exc:
             cls.log(
                 integration,
@@ -285,6 +294,35 @@ class GitLabIntegrationService:
             )
             return GitLabSyncResult("failed", str(exc), file_path, commit_sha, mapping=mapping)
 
+        if integration.auto_apply:
+            try:
+                session, _profile, _check = connect_device_cli(device, verify_saved_config=False)
+                try:
+                    running_config = session.get_running_config()
+                finally:
+                    session.disconnect()
+                latest_backup = ConfigurationRepository.latest_backup_for_device(device.pk)
+                if not latest_backup or not ConfigurationYamlService.backup_matches_running_config(
+                    device,
+                    latest_backup.config_text,
+                    running_config,
+                    source="runtime",
+                ):
+                    ConfigurationVCS.write_backup(device=device, config_text=running_config, source="runtime")
+            except Exception as exc:
+                message = f"GitLab auto-apply preflight failed: {exc}"
+                cls.log(
+                    integration,
+                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                    GitLabSyncLog.STATUS_FAILED,
+                    message,
+                    mapping=mapping,
+                    device=device,
+                    file_path=file_path,
+                    commit_sha=commit_sha,
+                )
+                return GitLabSyncResult("failed", message, file_path, commit_sha, mapping=mapping)
+
         with transaction.atomic():
             backup = ConfigurationBackup.objects.create(
                 device=device,
@@ -292,6 +330,7 @@ class GitLabIntegrationService:
                 version_name=f"gitlab-{timezone.now():%Y-%m-%d-%H-%M}",
                 config_text=yaml_text,
                 source=cls.SOURCE_GITLAB,
+                commit_hash=commit_sha,
                 config_checksum=ConfigurationYamlService.checksum(yaml_text),
                 redacted=True,
             )
@@ -309,23 +348,30 @@ class GitLabIntegrationService:
                 )
             )
 
-            scheduled_task = None
-            if integration.auto_apply:
-                scheduled_task = ScheduledTask.objects.create(
-                    task_name=f"GitLab apply {device.name} {timezone.now():%Y-%m-%d %H:%M:%S}",
-                    task_type=ScheduledTask.TYPE_APPLY_SCENARIO,
-                    target_device=device,
-                    task=yaml_text,
-                    schedule_time=timezone.now(),
-                    status=ScheduledTask.STATUS_PENDING,
-                    result_message="Queued from GitLab webhook.",
-                )
-                mapping.scheduled_task = scheduled_task
+            if mapping.scheduled_task_id:
+                mapping.scheduled_task = None
                 mapping.save(update_fields=("scheduled_task", "last_updated"))
 
         message = "Configuration imported from GitLab."
-        if scheduled_task:
-            message += " Apply task queued."
+        if integration.auto_apply:
+            try:
+                apply_message = TaskExecutor.apply_backup_to_device(backup)
+                message += f" Applied to device. {apply_message}"
+            except Exception as exc:
+                message = f"GitLab auto-apply failed: {exc}"
+                cls.log(
+                    integration,
+                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                    GitLabSyncLog.STATUS_FAILED,
+                    message,
+                    mapping=mapping,
+                    device=device,
+                    backup=backup,
+                    file_path=file_path,
+                    commit_sha=commit_sha,
+                )
+                return GitLabSyncResult("failed", message, file_path, commit_sha, backup, mapping)
+
         cls.log(
             integration,
             GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
@@ -334,7 +380,6 @@ class GitLabIntegrationService:
             mapping=mapping,
             device=device,
             backup=backup,
-            task=scheduled_task,
             file_path=file_path,
             commit_sha=commit_sha,
         )

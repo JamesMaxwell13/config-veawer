@@ -34,7 +34,10 @@ class ConfigurationService:
         checksum = ConfigurationYamlService.checksum(yaml_config)
         legacy_checksum = ConfigurationYamlService.checksum(redact_secrets(running_config))
         baseline = compare_to or ConfigurationRepository.latest_backup_for_device(device.pk)
-        if baseline and baseline.config_checksum in {checksum, legacy_checksum}:
+        if baseline and (
+            baseline.config_checksum in {checksum, legacy_checksum}
+            or ConfigurationYamlService.backup_matches_running_config(device, baseline.config_text, running_config, source=source)
+        ):
             logger.info(
                 "Manual configuration refresh completed unchanged %s baseline_backup_id=%s",
                 device_log_context(device, profile),

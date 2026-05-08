@@ -322,6 +322,8 @@ class ConfigurationRefreshTests(TestCase):
         self.assertContains(response, "Версии конфигураций")
         self.assertContains(response, "configuration-compare-form")
         self.assertContains(response, 'type="checkbox" value=', count=2)
+        self.assertContains(response, "<th>Source</th>", html=True)
+        self.assertContains(response, "<td>runtime</td>", html=True, count=2)
         self.assertContains(
             response,
             reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": self.profile.pk}),
@@ -330,6 +332,8 @@ class ConfigurationRefreshTests(TestCase):
         self.assertContains(response, "Отправить", count=1)
         self.assertContains(response, "btn-success")
         self.assertNotContains(response, "Отправить на устройство")
+        self.assertContains(response, f'<a href="{current.get_absolute_url()}">current</a>', html=True)
+        self.assertContains(response, f'<a href="{previous.get_absolute_url()}">previous</a>', html=True)
         self.assertContains(response, 'title="previous-checksum"')
         self.assertContains(response, ">previous-che</code>")
         self.assertContains(
@@ -458,6 +462,96 @@ class ConfigurationRefreshTests(TestCase):
         self.assertIn("Конфигурация v1 отправлена на устройство", result)
         self.assertIn("новая версия не создана", result)
         self.assertEqual(ConfigurationBackup.objects.filter(device=self.device).count(), 1)
+
+    def test_refresh_ignores_yaml_metadata_timestamps_when_comparing(self):
+        payload = ConfigurationYamlService.running_config_to_payload(
+            self.device,
+            "hostname refresh-sw1",
+            source="runtime",
+        )
+        payload["saved_at"] = "2026-05-07T00:00:00+03:00"
+        payload["updated_at"] = "2026-05-08T00:00:00+03:00"
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            version_name="metadata-only",
+            config_text=ConfigurationYamlService.dump_yaml(payload),
+            source="runtime",
+            config_checksum="old",
+        )
+        session = self._mock_session("hostname refresh-sw1")
+
+        with patch("main.application.backups.connect_device_cli", return_value=(session, self.profile, {"checked": False})):
+            result = ConfigurationService.refresh_device_config(self.device, compare_to=backup)
+
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["backup"], backup)
+        self.assertEqual(ConfigurationBackup.objects.filter(device=self.device).count(), 1)
+
+    def test_refresh_ignores_device_last_configuration_change_comment(self):
+        baseline_text = ConfigurationYamlService.running_config_to_yaml(
+            self.device,
+            "hostname refresh-sw1",
+            source="runtime",
+        )
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            version_name="without-device-timestamp",
+            config_text=baseline_text,
+            source="runtime",
+            config_checksum="old",
+        )
+        running_config = """
+Building configuration...
+Current configuration : 1234 bytes
+!
+! Last configuration change at 22:57:02 UTC Fri May 8 2026 by admin
+hostname refresh-sw1
+!
+end
+"""
+        session = self._mock_session(running_config)
+
+        with patch("main.application.backups.connect_device_cli", return_value=(session, self.profile, {"checked": False})):
+            result = ConfigurationService.refresh_device_config(self.device, compare_to=backup)
+
+        self.assertFalse(result["changed"])
+        self.assertEqual(result["backup"], backup)
+        self.assertEqual(ConfigurationBackup.objects.filter(device=self.device).count(), 1)
+
+    def test_running_config_yaml_ignores_device_timestamp_comments(self):
+        yaml_text = ConfigurationYamlService.running_config_to_yaml(
+            self.device,
+            """
+Building configuration...
+!
+! Last configuration change at 22:57:02 UTC Fri May 8 2026 by admin
+! NVRAM config last updated at 22:58:02 UTC Fri May 8 2026 by admin
+hostname refresh-sw1
+!
+end
+""",
+        )
+        payload = ConfigurationYamlService.load_payload(yaml_text)
+
+        serialized = ConfigurationYamlService.dump_yaml(payload)
+        self.assertIn("refresh-sw1", serialized)
+        self.assertNotIn("Last configuration change", serialized)
+        self.assertNotIn("NVRAM config last updated", serialized)
+
+    def test_raw_config_compare_ignores_device_timestamp_comments(self):
+        first = "hostname refresh-sw1\nend"
+        second = """
+Building configuration...
+!
+! Last configuration change at 22:57:02 UTC Fri May 8 2026 by admin
+hostname refresh-sw1
+!
+end
+"""
+
+        self.assertTrue(ConfigurationYamlService.configs_equivalent(first, second))
 
     def test_running_config_yaml_keeps_interface_raw_commands_in_section(self):
         raw_config = """

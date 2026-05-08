@@ -119,6 +119,7 @@ class GitLabConfigMappingTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = GitLabConfigMapping
         fields = (
+            "id",
             "integration",
             "device",
             "configuration_backup",
@@ -137,7 +138,7 @@ class GitLabSyncLogTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = GitLabSyncLog
-        fields = ("created", "integration", "device", "direction", "status", "file_path", "commit_sha", "message")
+        fields = ("id", "created", "integration", "device", "direction", "status", "file_path", "commit_sha", "message")
 
 
 class ScheduledTaskTable(NetBoxTable):
