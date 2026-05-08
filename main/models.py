@@ -53,6 +53,49 @@ class DeviceCredential(NetBoxModel):
         super().save(*args, **kwargs)
 
 
+class GitLabIntegration(NetBoxModel):
+    name = models.CharField(max_length=100, unique=True)
+    gitlab_url = models.URLField()
+    project_id = models.CharField(max_length=255)
+    branch = models.CharField(max_length=255, default="main")
+    root_path = models.CharField(max_length=255, default="configs")
+    file_path_pattern = models.CharField(
+        max_length=512,
+        default="{root_path}/{site_slug}/{location_slug}/{rack_slug}/{device_name}.yaml",
+    )
+    access_token = models.CharField(max_length=512)
+    webhook_secret = models.CharField(max_length=512, blank=True)
+    enabled = models.BooleanField(default=True)
+    auto_apply = models.BooleanField(default=False)
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "GitLab integration"
+        verbose_name_plural = "GitLab integrations"
+
+    def __str__(self) -> str:
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:gitlabintegration", kwargs={"pk": self.pk})
+
+    @property
+    def access_token_plain(self) -> str:
+        return decrypt_value(self.access_token)
+
+    @property
+    def webhook_secret_plain(self) -> str:
+        return decrypt_value(self.webhook_secret)
+
+    def save(self, *args, **kwargs):
+        if self.access_token and not is_encrypted(self.access_token):
+            self.access_token = encrypt_value(self.access_token)
+        if self.webhook_secret and not is_encrypted(self.webhook_secret):
+            self.webhook_secret = encrypt_value(self.webhook_secret)
+        super().save(*args, **kwargs)
+
+
 class CommandTemplate(NetBoxModel):
     OP_INTERFACE = "interface"
     OP_VLAN = "vlan"
@@ -153,6 +196,117 @@ class ConfigurationBackup(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse("plugins:main:configurationbackup", kwargs={"pk": self.pk})
+
+
+class GitLabConfigMapping(NetBoxModel):
+    integration = models.ForeignKey(
+        GitLabIntegration,
+        on_delete=models.CASCADE,
+        related_name="config_mappings",
+    )
+    device = models.ForeignKey("dcim.Device", on_delete=models.CASCADE, related_name="gitlab_config_mappings")
+    configuration_backup = models.ForeignKey(
+        ConfigurationBackup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_mappings",
+    )
+    scheduled_task = models.ForeignKey(
+        "ScheduledTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_mappings",
+    )
+    file_path = models.CharField(max_length=1024)
+    last_gitlab_commit_sha = models.CharField(max_length=64, blank=True)
+    last_plugin_update_at = models.DateTimeField(null=True, blank=True)
+    last_gitlab_update_at = models.DateTimeField(null=True, blank=True)
+    sync_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("integration", "file_path")
+        unique_together = (("integration", "device"), ("integration", "file_path"))
+        verbose_name = "GitLab config mapping"
+        verbose_name_plural = "GitLab config mappings"
+
+    def __str__(self) -> str:
+        return f"{self.device} -> {self.file_path}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:gitlabconfigmapping", kwargs={"pk": self.pk})
+
+
+class GitLabSyncLog(NetBoxModel):
+    DIRECTION_GITLAB_TO_PLUGIN = "gitlab_to_plugin"
+    DIRECTION_PLUGIN_TO_GITLAB = "plugin_to_gitlab"
+    DIRECTION_CHOICES = (
+        (DIRECTION_GITLAB_TO_PLUGIN, "GitLab to plugin"),
+        (DIRECTION_PLUGIN_TO_GITLAB, "Plugin to GitLab"),
+    )
+
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_SKIPPED = "skipped"
+    STATUS_CONFLICT = "conflict"
+    STATUS_CHOICES = (
+        (STATUS_SUCCESS, "Success"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_SKIPPED, "Skipped"),
+        (STATUS_CONFLICT, "Conflict"),
+    )
+
+    integration = models.ForeignKey(
+        GitLabIntegration,
+        on_delete=models.CASCADE,
+        related_name="sync_logs",
+    )
+    mapping = models.ForeignKey(
+        GitLabConfigMapping,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sync_logs",
+    )
+    device = models.ForeignKey(
+        "dcim.Device",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_sync_logs",
+    )
+    configuration_backup = models.ForeignKey(
+        ConfigurationBackup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_sync_logs",
+    )
+    task = models.ForeignKey(
+        "ScheduledTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_sync_logs",
+    )
+    direction = models.CharField(max_length=32, choices=DIRECTION_CHOICES)
+    file_path = models.CharField(max_length=1024, blank=True)
+    commit_sha = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES)
+    message = models.TextField(blank=True)
+    created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "GitLab sync log"
+        verbose_name_plural = "GitLab sync logs"
+
+    def __str__(self) -> str:
+        return f"{self.integration} {self.direction} {self.status}"
+
+    def get_absolute_url(self):
+        return reverse("plugins:main:gitlabsynclog", kwargs={"pk": self.pk})
 
 
 class DevicePlatformProfile(NetBoxModel):

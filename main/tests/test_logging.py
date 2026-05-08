@@ -150,7 +150,7 @@ class ConfigurationVCSLoggingTests(TestCase):
         self.assertIn("commit=abc123", output)
         self.assertNotIn("secret-value", output)
 
-    def test_restore_logs_backup_and_new_version_metadata(self):
+    def test_restore_logs_without_new_version_when_running_config_matches(self):
         device = create_device()
         backup = ConfigurationBackup.objects.create(
             device=device,
@@ -168,18 +168,10 @@ class ConfigurationVCSLoggingTests(TestCase):
             patch("main.application.tasks.ConfigurationVCS.write_backup") as write_backup,
             self.assertLogs(LOGGER_NAME, level="INFO") as logs,
         ):
-            write_backup.return_value = ConfigurationBackup(
-                pk=2,
-                device=device,
-                version=2,
-                version_name="v2",
-                config_text="hostname router-1",
-                source="restore",
-            )
             TaskExecutor.restore_backup_to_device(backup)
 
         output = "\n".join(logs.output)
+        write_backup.assert_not_called()
         self.assertIn("Restoring configuration backup", output)
-        self.assertIn("Configuration backup restored", output)
+        self.assertIn("Configuration backup restored without new version", output)
         self.assertIn("source_version=1", output)
-        self.assertIn("new_version=2", output)

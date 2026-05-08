@@ -8,6 +8,9 @@ from ..models import (
     ConfigurationBackup,
     DeviceCredential,
     DevicePlatformProfile,
+    GitLabConfigMapping,
+    GitLabIntegration,
+    GitLabSyncLog,
     NetworkTask,
     ScheduledTask,
     UMLConfiguration,
@@ -42,6 +45,42 @@ class CommandTemplateFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = CommandTemplate
         fields = ("id", "name", "vendor", "platform", "operation_type")
+
+
+@register_filterset
+class GitLabIntegrationFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = GitLabIntegration
+        fields = ("id", "name", "gitlab_url", "project_id", "branch", "enabled", "auto_apply")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(name__icontains=value) | Q(project_id__icontains=value) | Q(gitlab_url__icontains=value))
+
+
+@register_filterset
+class GitLabConfigMappingFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = GitLabConfigMapping
+        fields = ("id", "integration", "device", "configuration_backup", "file_path", "sync_enabled")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(file_path__icontains=value) | Q(device__name__icontains=value))
+
+
+@register_filterset
+class GitLabSyncLogFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = GitLabSyncLog
+        fields = ("id", "integration", "mapping", "device", "direction", "status", "file_path", "commit_sha", "created")
+
+    def search(self, queryset, name, value):
+        if not value.strip():
+            return queryset
+        return queryset.filter(Q(file_path__icontains=value) | Q(message__icontains=value) | Q(device__name__icontains=value))
 
 
 @register_filterset

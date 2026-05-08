@@ -1,0 +1,9 @@
+{% extends 'generic/object.html' %}
+
+{% block subtitle %}
+  {{ block.super }}
+  <div class="text-secondary fs-5">
+    <span class="text-muted">Status:</span> {{ object.status }}
+    <span class="text-muted ms-3">File:</span> <code>{{ object.file_path }}</code>
+  </div>
+{% endblock %}

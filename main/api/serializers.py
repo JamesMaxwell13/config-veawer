@@ -5,6 +5,9 @@ from main.models import (
     ConfigurationBackup,
     DeviceCredential,
     DevicePlatformProfile,
+    GitLabConfigMapping,
+    GitLabIntegration,
+    GitLabSyncLog,
     NetworkTask,
     ScheduledTask,
     UMLConfiguration,
@@ -30,6 +33,42 @@ class DevicePlatformProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DevicePlatformProfile
         fields = "__all__"
+
+
+class GitLabIntegrationSerializer(serializers.ModelSerializer):
+    access_token = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    webhook_secret = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    class Meta:
+        model = GitLabIntegration
+        fields = "__all__"
+
+    def update(self, instance, validated_data):
+        if not validated_data.get("access_token"):
+            validated_data.pop("access_token", None)
+        if not validated_data.get("webhook_secret"):
+            validated_data.pop("webhook_secret", None)
+        return super().update(instance, validated_data)
+
+
+class GitLabConfigMappingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GitLabConfigMapping
+        fields = "__all__"
+
+
+class GitLabSyncLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GitLabSyncLog
+        fields = "__all__"
+
+
+class GitLabWebhookPayloadSerializer(serializers.Serializer):
+    ref = serializers.CharField(required=False, allow_blank=True)
+    checkout_sha = serializers.CharField(required=False, allow_blank=True)
+    after = serializers.CharField(required=False, allow_blank=True)
+    project = serializers.DictField(required=False)
+    commits = serializers.ListField(child=serializers.DictField(), required=False)
 
 
 class NetworkTaskSerializer(serializers.ModelSerializer):

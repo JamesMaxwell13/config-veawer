@@ -341,6 +341,23 @@ class ConfigurationRefreshTests(TestCase):
             reverse("plugins:main:configurationbackup_restore", kwargs={"pk": current.pk}),
         )
 
+    def test_restore_redirects_to_plugin_device_page(self):
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            version_name="previous",
+            config_text="hostname previous",
+            source="runtime",
+        )
+
+        with patch.object(TaskExecutor, "restore_backup_to_device", return_value="ok") as restore:
+            response = self.client.post(
+                reverse("plugins:main:configurationbackup_restore", kwargs={"pk": backup.pk})
+            )
+
+        restore.assert_called_once_with(backup)
+        self.assertRedirects(response, self.profile.get_absolute_url(), fetch_redirect_response=False)
+
     def test_configuration_diff_page_highlights_added_and_removed_lines(self):
         ConfigurationBackup.objects.create(
             device=self.device,
@@ -363,12 +380,12 @@ class ConfigurationRefreshTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '<span class="text-danger">-hostname old</span>')
-        self.assertContains(response, '<span class="text-success">+hostname new</span>')
-        self.assertContains(response, "<span>---")
-        self.assertContains(response, "<span>+++")
+        self.assertContains(response, "-hostname old")
+        self.assertContains(response, "+hostname new")
+        self.assertContains(response, "---")
+        self.assertContains(response, "+++")
 
-    def test_restore_yaml_configuration_generates_commands_and_creates_new_version(self):
+    def test_restore_yaml_configuration_generates_commands_and_creates_new_version_when_changed(self):
         backup = ConfigurationBackup.objects.create(
             device=self.device,
             version=1,
@@ -414,6 +431,33 @@ class ConfigurationRefreshTests(TestCase):
         restored = ConfigurationBackup.objects.filter(device=self.device).order_by("-version").first()
         self.assertEqual(restored.source, "restore")
         self.assertTrue(ConfigurationYamlService.is_yaml_config(restored.config_text))
+
+    def test_restore_yaml_configuration_does_not_create_new_version_when_unchanged(self):
+        config_text = ConfigurationYamlService.running_config_to_yaml(
+            self.device,
+            "hostname selected-hostname",
+            source="runtime",
+        )
+        backup = ConfigurationBackup.objects.create(
+            device=self.device,
+            version=1,
+            version_name="selected",
+            config_text=config_text,
+            source="runtime",
+            config_checksum=ConfigurationYamlService.checksum(config_text),
+        )
+        session = self._mock_session("hostname selected-hostname")
+
+        with patch("main.application.tasks.connect_device_cli", return_value=(session, self.profile, {"checked": False})):
+            result = TaskExecutor.restore_backup_to_device(backup)
+
+        session.send_config_set.assert_called_once_with([
+            "hostname selected-hostname",
+            "write memory",
+        ])
+        self.assertIn("Конфигурация v1 отправлена на устройство", result)
+        self.assertIn("новая версия не создана", result)
+        self.assertEqual(ConfigurationBackup.objects.filter(device=self.device).count(), 1)
 
     def test_running_config_yaml_keeps_interface_raw_commands_in_section(self):
         raw_config = """
@@ -659,7 +703,7 @@ end
         self.assertContains(response, '<div class="mb-0 text-body" style="white-space: pre-wrap;">last run failed</div>')
         self.assertNotContains(response, "<pre class=\"mb-0 text-wrap\"><code>last run failed</code></pre>")
         self.assertContains(response, "YAML задачи")
-        self.assertContains(response, '<pre class="mb-0"><code>operations:')
+        self.assertContains(response, '<pre class="mb-0 yaml-code-block"><code data-yaml-highlight>operations:')
         self.assertContains(response, "hostname: profile-hostname")
         self.assertContains(response, "Просмотр команд")
         self.assertContains(response, "Создать версию")

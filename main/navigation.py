@@ -59,8 +59,15 @@ menu_items = (
         ),
     ),
     PluginMenuItem(
-        link="plugins:main:swagger_ui",
-        link_text="API Docs",
+        link="plugins:main:gitlabintegration_list",
+        link_text="GitLab",
+        buttons=(
+            PluginMenuButton(
+                link="plugins:main:gitlabintegration_add",
+                title="Добавить GitLab integration",
+                icon_class="mdi mdi-plus-thick",
+            ),
+        ),
     ),
 )
 

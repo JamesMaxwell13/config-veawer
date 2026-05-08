@@ -63,6 +63,20 @@ class TaskExecutor:
         )
         session, _profile, _check = connect_device_cli(task.target_device, verify_saved_config=True)
         try:
+            before_config = session.get_running_config()
+            before_backup = ConfigurationVCS.write_backup(
+                task.target_device,
+                before_config,
+                task=task,
+                source="pre_apply",
+            )
+            logger.info(
+                "Pre-apply configuration backup created %s task_id=%s backup_id=%s version=%s",
+                device_log_context(task.target_device, profile),
+                task.pk,
+                before_backup.pk,
+                before_backup.version,
+            )
             session.send_config_set(commands)
             running = session.get_running_config()
         finally:
@@ -153,6 +167,18 @@ class TaskExecutor:
             running = session.get_running_config()
         finally:
             session.disconnect()
+
+        if ConfigurationYamlService.backup_matches_running_config(backup.device, backup.config_text, running):
+            logger.info(
+                "Configuration backup restored without new version %s backup_id=%s source_version=%s",
+                device_log_context(backup.device, profile),
+                backup.pk,
+                backup.version,
+            )
+            return (
+                f"Конфигурация v{backup.version} отправлена на устройство; "
+                "текущая конфигурация совпадает, новая версия не создана"
+            )
 
         new_configuration = ConfigurationVCS.write_backup(
             backup.device,

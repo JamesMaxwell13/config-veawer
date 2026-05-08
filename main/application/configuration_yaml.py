@@ -347,6 +347,36 @@ class ConfigurationYamlService:
         return data
 
     @classmethod
+    def comparable_payload(cls, yaml_text: str) -> dict[str, Any]:
+        payload = cls.load_payload(yaml_text)
+        payload.pop("saved_at", None)
+        payload.pop("source", None)
+        return payload
+
+    @classmethod
+    def configs_equivalent(cls, first: str, second: str) -> bool:
+        first_is_yaml = cls.is_yaml_config(first)
+        second_is_yaml = cls.is_yaml_config(second)
+        if first_is_yaml and second_is_yaml:
+            return cls.comparable_payload(first) == cls.comparable_payload(second)
+        if first_is_yaml != second_is_yaml:
+            return False
+        return cls._config_lines(first) == cls._config_lines(second)
+
+    @classmethod
+    def backup_matches_running_config(
+        cls,
+        device,
+        backup_text: str,
+        running_config: str,
+        source: str = "restore",
+    ) -> bool:
+        if cls.is_yaml_config(backup_text):
+            running_yaml = cls.running_config_to_yaml(device, running_config, source=source)
+            return cls.configs_equivalent(backup_text, running_yaml)
+        return cls.configs_equivalent(backup_text, running_config)
+
+    @classmethod
     def _operations_to_commands(cls, operations: list[dict[str, Any]], profile: DevicePlatformProfile) -> list[str]:
         return CommandGenerator.generate_commands(
             {"operations": operations},

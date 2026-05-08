@@ -8,6 +8,9 @@ from ..models import (
     ConfigurationBackup,
     DeviceCredential,
     DevicePlatformProfile,
+    GitLabConfigMapping,
+    GitLabIntegration,
+    GitLabSyncLog,
     NetworkTask,
     ScheduledTask,
     UMLConfiguration,
@@ -96,6 +99,45 @@ class DevicePlatformProfileTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = DevicePlatformProfile
         fields = ("device", "netbox_device", "credential", "platform", "management_ip", "enabled", "last_updated")
+
+
+class GitLabIntegrationTable(NetBoxTable):
+    name = TemplateColumn(
+        template_code='<a href="{{ record.get_absolute_url }}">{{ record.name }}</a>',
+        verbose_name="Name",
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = GitLabIntegration
+        fields = ("name", "gitlab_url", "project_id", "branch", "root_path", "enabled", "auto_apply", "last_sync_at")
+
+
+class GitLabConfigMappingTable(NetBoxTable):
+    def render_last_gitlab_commit_sha(self, value):
+        return ConfigurationBackupTable._render_short_hash(value)
+
+    class Meta(NetBoxTable.Meta):
+        model = GitLabConfigMapping
+        fields = (
+            "integration",
+            "device",
+            "configuration_backup",
+            "file_path",
+            "last_gitlab_commit_sha",
+            "sync_enabled",
+            "last_updated",
+        )
+
+
+class GitLabSyncLogTable(NetBoxTable):
+    actions = None
+
+    def render_commit_sha(self, value):
+        return ConfigurationBackupTable._render_short_hash(value)
+
+    class Meta(NetBoxTable.Meta):
+        model = GitLabSyncLog
+        fields = ("created", "integration", "device", "direction", "status", "file_path", "commit_sha", "message")
 
 
 class ScheduledTaskTable(NetBoxTable):

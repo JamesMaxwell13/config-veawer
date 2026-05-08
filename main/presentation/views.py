@@ -8,6 +8,7 @@ from django.http import HttpResponseBadRequest
 from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
+from django_tables2 import RequestConfig
 from netbox.views import generic
 from utilities.views import ObjectPermissionRequiredMixin, ViewTab, register_model_view
 from urllib.parse import urlencode
@@ -16,6 +17,7 @@ import yaml
 from . import filtersets, forms, tables
 from ..application.backups import ConfigurationService
 from ..application.configuration_yaml import ConfigurationYamlService
+from ..application.gitlab import GitLabIntegrationService
 from ..application.tasks import TaskExecutor
 from ..application.uml import UMLConfigurationService
 from ..domain.configuration import CommandGenerator
@@ -27,6 +29,9 @@ from ..models import (
     ConfigurationBackup,
     DeviceCredential,
     DevicePlatformProfile,
+    GitLabConfigMapping,
+    GitLabIntegration,
+    GitLabSyncLog,
     NetworkTask,
     ScheduledTask,
     UMLConfiguration,
@@ -174,6 +179,113 @@ class DevicePlatformProfileBulkDeleteView(generic.BulkDeleteView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
     table = tables.DevicePlatformProfileTable
     filterset = filtersets.DevicePlatformProfileFilterSet
+
+
+class GitLabIntegrationListView(generic.ObjectListView):
+    queryset = GitLabIntegration.objects.all()
+    table = tables.GitLabIntegrationTable
+    filterset = filtersets.GitLabIntegrationFilterSet
+
+
+class GitLabIntegrationView(generic.ObjectView):
+    queryset = GitLabIntegration.objects.all()
+
+    def get_extra_context(self, request, instance):
+        mapping_table = tables.GitLabConfigMappingTable(
+            GitLabConfigMapping.objects.filter(integration=instance).select_related(
+                "integration",
+                "device",
+                "configuration_backup",
+            ),
+            prefix="mapping-",
+        )
+        sync_log_table = tables.GitLabSyncLogTable(
+            GitLabSyncLog.objects.filter(integration=instance).select_related(
+                "integration",
+                "mapping",
+                "device",
+                "configuration_backup",
+                "task",
+            ),
+            prefix="log-",
+        )
+        RequestConfig(request, paginate={"per_page": 10}).configure(mapping_table)
+        RequestConfig(request, paginate={"per_page": 10}).configure(sync_log_table)
+        return {
+            "mapping_table": mapping_table,
+            "sync_log_table": sync_log_table,
+        }
+
+
+class GitLabIntegrationEditView(generic.ObjectEditView):
+    queryset = GitLabIntegration.objects.all()
+    form = forms.GitLabIntegrationForm
+
+
+class GitLabIntegrationDeleteView(generic.ObjectDeleteView):
+    queryset = GitLabIntegration.objects.all()
+
+
+class GitLabIntegrationActionView(ObjectPermissionRequiredMixin, View):
+    queryset = GitLabIntegration.objects.all()
+    action = ""
+
+    def get_required_permission(self):
+        return "main.change_gitlabintegration"
+
+    def post(self, request, pk):
+        integration = get_object_or_404(self.queryset, pk=pk)
+        try:
+            if self.action == "test":
+                GitLabIntegrationService.client_for(integration).test_connection(
+                    integration.project_id,
+                    integration.branch,
+                )
+                messages.success(request, "GitLab connection succeeded.")
+            elif self.action == "sync":
+                results = GitLabIntegrationService.sync_from_gitlab(integration)
+                messages.success(request, f"GitLab sync completed: {len(results)} file(s).")
+            elif self.action == "push":
+                results = GitLabIntegrationService.push_to_gitlab(integration)
+                messages.success(request, f"GitLab push completed: {len(results)} configuration(s).")
+            elif self.action == "rebuild":
+                count = GitLabIntegrationService.rebuild_paths(integration)
+                messages.success(request, f"Rebuilt {count} GitLab path(s).")
+            else:
+                return HttpResponseBadRequest("Unsupported GitLab action.")
+        except Exception as exc:
+            messages.error(request, f"GitLab action failed: {exc}")
+            logger.exception("GitLab action failed action=%s integration_id=%s", self.action, integration.pk)
+        return redirect(integration.get_absolute_url())
+
+
+class GitLabConfigMappingListView(generic.ObjectListView):
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+    table = tables.GitLabConfigMappingTable
+    filterset = filtersets.GitLabConfigMappingFilterSet
+
+
+class GitLabConfigMappingView(generic.ObjectView):
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+
+
+class GitLabConfigMappingEditView(generic.ObjectEditView):
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+    form = forms.GitLabConfigMappingForm
+
+
+class GitLabConfigMappingDeleteView(generic.ObjectDeleteView):
+    queryset = GitLabConfigMapping.objects.all()
+
+
+class GitLabSyncLogListView(generic.ObjectListView):
+    queryset = GitLabSyncLog.objects.select_related("integration", "mapping", "device", "configuration_backup", "task")
+    table = tables.GitLabSyncLogTable
+    filterset = filtersets.GitLabSyncLogFilterSet
+
+
+class GitLabSyncLogView(generic.ObjectView):
+    queryset = GitLabSyncLog.objects.select_related("integration", "mapping", "device", "configuration_backup", "task")
 
 
 class DevicePlatformProfileCLIView(View):
@@ -432,7 +544,10 @@ class ConfigurationBackupRestoreView(View):
                 backup.pk,
                 request.user,
             )
-        return redirect(reverse("dcim:device_configurations", kwargs={"pk": backup.device.pk}))
+        profile = DevicePlatformProfile.objects.filter(device=backup.device).first()
+        if profile:
+            return redirect(profile.get_absolute_url())
+        return redirect(backup.get_absolute_url())
 
 
 def _device_has_config_weaver_profile(device):

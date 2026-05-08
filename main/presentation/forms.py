@@ -1,6 +1,7 @@
 from django import forms
 import hashlib
 import json
+from urllib.parse import urlsplit
 import yaml
 
 from dcim.models import Device
@@ -17,6 +18,8 @@ from ..models import (
     ConfigurationBackup,
     DeviceCredential,
     DevicePlatformProfile,
+    GitLabConfigMapping,
+    GitLabIntegration,
     NetworkTask,
     ScheduledTask,
     UMLConfiguration,
@@ -128,6 +131,69 @@ class DevicePlatformProfileBulkEditForm(NetBoxModelBulkEditForm):
         FieldSet("credential", "vendor", "platform", "management_ip", "command_timeout", "enabled"),
     )
     nullable_fields = ("management_ip",)
+
+
+class GitLabIntegrationForm(NetBoxModelForm):
+    access_token = forms.CharField(widget=forms.PasswordInput(render_value=False))
+    webhook_secret = forms.CharField(required=False, widget=forms.PasswordInput(render_value=False))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["access_token"].required = False
+
+    def clean(self):
+        cleaned = super().clean() or self.cleaned_data
+        if self.instance and self.instance.pk and not cleaned.get("access_token"):
+            cleaned["access_token"] = self.instance.access_token
+        if self.instance and self.instance.pk and not cleaned.get("webhook_secret"):
+            cleaned["webhook_secret"] = self.instance.webhook_secret
+        return cleaned
+
+    def clean_gitlab_url(self):
+        value = (self.cleaned_data.get("gitlab_url") or "").strip().rstrip("/")
+        parsed = urlsplit(value)
+        if parsed.query or parsed.fragment:
+            raise forms.ValidationError("Укажите базовый URL GitLab без query string или fragment.")
+        if parsed.path and parsed.path != "/":
+            raise forms.ValidationError("Укажите базовый URL GitLab, например https://gitlab.com, без пути страницы.")
+        return value
+
+    class Meta:
+        model = GitLabIntegration
+        fields = (
+            "name",
+            "gitlab_url",
+            "project_id",
+            "branch",
+            "root_path",
+            "file_path_pattern",
+            "access_token",
+            "webhook_secret",
+            "enabled",
+            "auto_apply",
+            "tags",
+        )
+
+
+class GitLabConfigMappingForm(NetBoxModelForm):
+    integration = DynamicModelChoiceField(queryset=GitLabIntegration.objects.all())
+    device = DynamicModelChoiceField(queryset=Device.objects.all())
+    configuration_backup = DynamicModelChoiceField(queryset=ConfigurationBackup.objects.all(), required=False)
+    scheduled_task = DynamicModelChoiceField(queryset=ScheduledTask.objects.all(), required=False)
+
+    class Meta:
+        model = GitLabConfigMapping
+        fields = (
+            "integration",
+            "device",
+            "configuration_backup",
+            "scheduled_task",
+            "file_path",
+            "last_gitlab_commit_sha",
+            "sync_enabled",
+            "tags",
+        )
 
 
 class DeviceCommandForm(forms.Form):
@@ -271,6 +337,9 @@ class ConfigurationBackupForm(NetBoxModelForm):
         if kwargs.get("commit", True):
             instance.save()
             self.save_m2m()
+            from ..application.gitlab import GitLabIntegrationService
+
+            GitLabIntegrationService.push_backup_to_gitlab(instance)
         return instance
 
     class Meta:
