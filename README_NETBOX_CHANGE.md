@@ -1,4 +1,4 @@
-# Изменения NetBox для config-weaver
+# Изменения NetBox Для config-weaver
 
 ## Главное правило
 
@@ -46,6 +46,31 @@ PLUGINS_CONFIG = {
 
 Полный пример конфигурации: `examples/netbox_plugin_configuration.py`.
 
+## Установка Пакета
+
+Плагин ставится в virtualenv NetBox в editable-режиме:
+
+```bash
+/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install -e \
+  /home/andrew/bsuir/diploma/config-weaver
+```
+
+Проверка установленного пакета:
+
+```bash
+/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show config-weaver
+```
+
+Для локального окружения можно использовать `Makefile` из `/home/andrew/bsuir/diploma`:
+
+```bash
+make deps
+make install-plugin
+make verify-plugin
+make migrate
+make collectstatic
+```
+
 ## Актуальные URL
 
 UI:
@@ -54,8 +79,12 @@ UI:
 /plugins/config-weaver/devices/
 /plugins/config-weaver/credentials/
 /plugins/config-weaver/configurations/
+/plugins/config-weaver/network-tasks/
 /plugins/config-weaver/tasks/
 /plugins/config-weaver/templates/
+/plugins/config-weaver/gitlab/
+/plugins/config-weaver/gitlab/mappings/
+/plugins/config-weaver/gitlab/logs/
 /plugins/config-weaver/uml/
 ```
 
@@ -66,7 +95,12 @@ REST API:
 /api/plugins/config-weaver/credentials/
 /api/plugins/config-weaver/configurations/
 /api/plugins/config-weaver/tasks/
+/api/plugins/config-weaver/scheduled-tasks/
 /api/plugins/config-weaver/templates/
+/api/plugins/config-weaver/gitlab-integrations/
+/api/plugins/config-weaver/gitlab-mappings/
+/api/plugins/config-weaver/gitlab-sync-logs/
+/api/plugins/config-weaver/gitlab/webhook/
 /api/plugins/config-weaver/uml-configurations/
 ```
 
@@ -110,6 +144,8 @@ make run-web
 
 Такой подход оставляет маршрутизацию внутри плагина и не требует правок `netbox/netbox/urls.py`.
 
+Если в NetBox задан `BASE_PATH`, WebSocket route учитывает этот префикс автоматически. Reverse proxy должен проксировать соответствующий `<BASE_PATH>/ws/` путь в ASGI backend.
+
 ## Диагностика WebSocket
 
 ```bash
@@ -137,6 +173,14 @@ curl -i -N \
 3. Проксировать `/ws/` в ASGI backend с WebSocket upgrade headers.
 4. Запустить NetBox RQ worker.
 5. Запустить `run_due_tasks` через cron, systemd timer или отдельный service loop.
+
+GitLab webhook должен быть доступен по HTTPS endpoint:
+
+```text
+https://netbox.example.com/api/plugins/config-weaver/gitlab/webhook/
+```
+
+Webhook выполняет только импорт/постановку задачи. SSH-команды применяются планировщиком, поэтому worker и цикл `run_due_tasks` должны быть запущены отдельно.
 
 Минимальные nginx headers для `/ws/`:
 

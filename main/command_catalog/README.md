@@ -7,6 +7,8 @@ This directory contains built-in command templates for config-weaver.
 
 The catalog is not intended to be a complete vendor CLI reference. It is a reusable baseline for common operations and for converting saved running-config YAML back into commands.
 
+The files are packaged with the plugin through `MANIFEST.in`. After changing them, reinstalling the editable package is usually not required, but the database copy must be synchronized with `sync_command_templates`.
+
 ## Template Sources
 
 At runtime config-weaver merges two sources:
@@ -15,6 +17,8 @@ At runtime config-weaver merges two sources:
 2. Active `CommandTemplate` objects stored in NetBox.
 
 If a database template has the same `vendor`, `platform`, `operation_type`, and `name` as a built-in template, the database template wins. This lets an operator override built-in behavior without editing plugin files.
+
+The plugin caches active templates under the `cw:templates:active` cache key. Saving or deleting a `CommandTemplate`, or running `sync_command_templates`, invalidates that cache.
 
 Run template sync from the NetBox app directory:
 
@@ -53,7 +57,7 @@ Required fields:
 
 - `name` - stable operation name used in YAML plans and parsed backups.
 - `platform` - platform from `DevicePlatformProfile`, for example `cisco_ios` or `dlink_ds`.
-- `operation_type` - operation group, such as `interface`, `vlan`, `ip`, `routing`, `security`, or `custom`.
+- `operation_type` - operation group accepted by the `CommandTemplate` model: `interface`, `vlan`, `ip`, or `custom`.
 - `command_body` - one or more CLI commands.
 
 Recommended fields:
@@ -81,6 +85,8 @@ operations:
 ```
 
 If a required placeholder is missing, preview and execution fail before commands are sent to the device.
+
+Keep template names stable. Existing backups, `NetworkTask.plan_yaml`, GitLab desired-state files, and scheduled task YAML can all refer to these names.
 
 ## Running-Config YAML And Sections
 
@@ -119,6 +125,8 @@ The Cisco catalog currently covers the main command families used by the tested 
 
 Rare commands that do not need reuse can stay as `raw_commands`.
 
+Supported Cisco-family platform identifiers are `cisco_ios`, `cisco_xe`, and `cisco_nxos`; the current built-in catalog mainly targets `cisco_ios`. Supported D-Link-family identifiers are `dlink_ds` and `dlink_dgs`; the current built-in D-Link catalog mainly targets `dlink_ds`.
+
 ## Adding A Cisco Template
 
 Add a new item to `cisco.yaml`:
@@ -126,7 +134,7 @@ Add a new item to `cisco.yaml`:
 ```yaml
   - name: ospf_network
     platform: cisco_ios
-    operation_type: routing
+    operation_type: ip
     revision: 1
     description: Add an OSPF network statement.
     params: [process_id, network, wildcard, area]
@@ -186,4 +194,11 @@ For parser/template interactions, also run the focused configuration refresh tes
 
 ```bash
 /home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_config_refresh --keepdb
+```
+
+If the change affects scheduled execution, GitLab import/export, or command rendering from UI forms, also run the matching focused tests:
+
+```bash
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_scheduling --keepdb
+/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_gitlab_integration --keepdb
 ```

@@ -2,7 +2,13 @@
 
 `config-weaver` - плагин для NetBox 4.x, предназначенный для управления конфигурациями сетевых устройств.
 
-Плагин добавляет профили подключения к устройствам, зашифрованные учётные данные, шаблоны команд, планировщик задач, резервные копии конфигураций, YAML-представление конфигураций, ручной WebSocket-терминал, локальное Git/VCS-хранилище версий и Swagger UI для REST API.
+Плагин добавляет профили подключения к устройствам, зашифрованные учётные данные, встроенный каталог и пользовательские шаблоны команд, сценарии команд, планировщик задач, резервные копии конфигураций, YAML-представление конфигураций, ручной WebSocket-терминал, локальное Git/VCS-хранилище версий, двустороннюю GitLab-синхронизацию desired state и Swagger UI для REST API.
+
+## Документы
+
+- `README.md` - установка, запуск, пользовательские сценарии и API.
+- `README_NETBOX_CHANGE.md` - что нужно и не нужно менять в NetBox для работы плагина.
+- `main/command_catalog/README.md` - формат встроенного каталога команд и правила добавления шаблонов.
 
 ## Структура Рабочего Каталога
 
@@ -55,7 +61,14 @@ cd /home/andrew/bsuir/diploma/config-weaver
 Проверьте, что пакет доступен:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show netbox-config-weaver
+/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show config-weaver
+```
+
+Те же действия можно выполнить через `Makefile` из рабочего каталога:
+
+```bash
+cd /home/andrew/bsuir/diploma
+make setup
 ```
 
 ## Настройка NetBox
@@ -152,6 +165,7 @@ make run-scheduler
 - `/plugins/config-weaver/devices/` - профили подключения устройств.
 - `/plugins/config-weaver/credentials/` - зашифрованные SSH-учётные данные.
 - `/plugins/config-weaver/configurations/` - сохранённые конфигурации и backup-версии.
+- `/plugins/config-weaver/network-tasks/` - reusable YAML-сценарии команд.
 - `/plugins/config-weaver/gitlab/` - интеграции с GitLab.
 - `/plugins/config-weaver/gitlab/mappings/` - связи устройств NetBox с файлами GitLab.
 - `/plugins/config-weaver/gitlab/logs/` - журнал синхронизации GitLab.
@@ -159,6 +173,8 @@ make run-scheduler
 - `/plugins/config-weaver/templates/` - шаблоны команд.
 - `/plugins/config-weaver/uml/` - UML-описания.
 - `/plugins/config-weaver/api/docs/` - Swagger UI для REST API плагина.
+
+На странице профиля устройства доступны действия `CLI`, `Версии`, `Получить конфигурацию` и `Терминал`. На странице backup-конфигурации доступны YAML-представление, refresh/drift-check и отправка выбранной версии на устройство.
 
 Списковые страницы поддерживают стандартные NetBox bulk edit и bulk delete там, где это применимо.
 
@@ -194,6 +210,20 @@ curl -H "Authorization: Token YOUR_API_TOKEN" \
 curl -H "Authorization: Token YOUR_API_TOKEN" \
   http://netbox/api/plugins/config-weaver/configurations/compare/?from=1\&to=2
 ```
+
+Основные API resources:
+
+- `/api/plugins/config-weaver/credentials/`
+- `/api/plugins/config-weaver/devices/`
+- `/api/plugins/config-weaver/templates/`
+- `/api/plugins/config-weaver/tasks/` - `NetworkTask`, reusable сценарии команд.
+- `/api/plugins/config-weaver/scheduled-tasks/` - задачи планировщика.
+- `/api/plugins/config-weaver/configurations/`
+- `/api/plugins/config-weaver/gitlab-integrations/`
+- `/api/plugins/config-weaver/gitlab-mappings/`
+- `/api/plugins/config-weaver/gitlab-sync-logs/`
+- `/api/plugins/config-weaver/gitlab/webhook/`
+- `/api/plugins/config-weaver/uml-configurations/`
 
 Старые примеры `/api/plugins/main/...` неактуальны. NetBox регистрирует плагин по публичному `base_url = "config-weaver"`.
 
