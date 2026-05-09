@@ -20,17 +20,17 @@ If a database template has the same `vendor`, `platform`, `operation_type`, and 
 
 The plugin caches active templates under the `cw:templates:active` cache key. Saving or deleting a `CommandTemplate`, or running `sync_command_templates`, invalidates that cache.
 
-Run template sync from the NetBox app directory:
+Run template sync from the workspace root:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates
+cd netbox/netbox
+../venv/bin/python manage.py sync_command_templates
 ```
 
 Dry run:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates --dry-run
+netbox/venv/bin/python netbox/netbox/manage.py sync_command_templates --dry-run
 ```
 
 ## YAML Template Format
@@ -182,23 +182,23 @@ Then reference `access_vlan_named` from `NetworkTask.plan_yaml` or a rendered co
 
 ## Validation Checklist
 
-After editing templates:
+After editing templates, run checks from the workspace root:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates --dry-run
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_command_catalog --keepdb
+cd netbox/netbox
+../venv/bin/python manage.py sync_command_templates --dry-run
+../venv/bin/python manage.py test main.tests.test_command_catalog --keepdb
 ```
 
 For parser/template interactions, also run the focused configuration refresh tests:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_config_refresh --keepdb
+netbox/venv/bin/python netbox/netbox/manage.py test main.tests.test_config_refresh --keepdb
 ```
 
 If the change affects scheduled execution, GitLab import/export, or command rendering from UI forms, also run the matching focused tests:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_scheduling --keepdb
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_gitlab_integration --keepdb
+netbox/venv/bin/python netbox/netbox/manage.py test main.tests.test_scheduling --keepdb
+netbox/venv/bin/python netbox/netbox/manage.py test main.tests.test_gitlab_integration --keepdb
 ```

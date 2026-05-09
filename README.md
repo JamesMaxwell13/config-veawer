@@ -15,28 +15,28 @@
 Ожидаемая структура локального workspace:
 
 ```text
-/home/andrew/bsuir/diploma/
+../
 ├── config-weaver/      # исходный код плагина
 ├── config-weaver-vcs/  # опциональное Git-хранилище версий конфигураций
 └── netbox/             # исходный код NetBox и virtualenv
 ```
 
-Команды NetBox выполняются из:
+Если не указано иначе, команды ниже предполагают запуск из корня workspace. Команды NetBox выполняются из:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
+cd netbox/netbox
 ```
 
 Команды, относящиеся к исходникам плагина, выполняются из:
 
 ```bash
-cd /home/andrew/bsuir/diploma/config-weaver
+cd config-weaver
 ```
 
 ## Требования
 
 - NetBox 4.x, проверялось с локальным деревом NetBox 4.5.x.
-- Python virtualenv: `/home/andrew/bsuir/diploma/netbox/venv`.
+- Python virtualenv: `netbox/venv`.
 - PostgreSQL, настроенный для NetBox.
 - Redis для задач и кеширования NetBox.
 - Python-зависимости плагина: `pyyaml`, `netmiko`, `paramiko`, `cryptography`, `channels`, `daphne`.
@@ -47,27 +47,27 @@ cd /home/andrew/bsuir/diploma/config-weaver
 Установите runtime-зависимости в virtualenv NetBox:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install \
+netbox/venv/bin/python -m pip install \
   pyyaml netmiko paramiko cryptography channels daphne
 ```
 
 Установите плагин в editable-режиме:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install -e \
-  /home/andrew/bsuir/diploma/config-weaver
+netbox/venv/bin/python -m pip install -e \
+  config-weaver
 ```
 
 Проверьте, что пакет доступен:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show config-weaver
+netbox/venv/bin/python -m pip show config-weaver
 ```
 
 Те же действия можно выполнить через `Makefile` из рабочего каталога:
 
 ```bash
-cd /home/andrew/bsuir/diploma
+cd ..
 make setup
 ```
 
@@ -83,7 +83,7 @@ PLUGINS = ["main"]
 PLUGINS_CONFIG = {
     "main": {
         "secret_key": "replace-with-a-long-random-plugin-secret",
-        "vcs_repo_path": "/home/andrew/bsuir/diploma/config-weaver-vcs",
+        "vcs_repo_path": "config-weaver-vcs",
         "scheduler_max_workers": 8,
     }
 }
@@ -102,37 +102,37 @@ PLUGINS_CONFIG = {
 Примените миграции:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py migrate
+cd netbox/netbox
+../venv/bin/python manage.py migrate
 ```
 
 Синхронизируйте встроенные шаблоны команд:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates
+cd netbox/netbox
+../venv/bin/python manage.py sync_command_templates
 ```
 
 Предварительный просмотр синхронизации шаблонов без записи:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py sync_command_templates --dry-run
+netbox/venv/bin/python netbox/netbox/manage.py sync_command_templates --dry-run
 ```
 
 Базовая проверка Django:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py check
+netbox/venv/bin/python netbox/netbox/manage.py check
 ```
 
 ## Локальный Запуск
 
-Используйте `Makefile` из `/home/andrew/bsuir/diploma`.
+Используйте `Makefile` из `..`.
 
 Запустить NetBox ASGI, RQ worker и цикл планировщика config-weaver:
 
 ```bash
-cd /home/andrew/bsuir/diploma
+cd ..
 make run
 ```
 
@@ -555,27 +555,27 @@ Update config for <device_name> from NetBox Config Weaver
 Применить миграции:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py migrate
+cd netbox/netbox
+../venv/bin/python manage.py migrate
 ```
 
 Проверить проект:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py check
+cd netbox/netbox
+../venv/bin/python manage.py check
 ```
 
 Запустить тесты плагина:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main
+cd netbox/netbox
+../venv/bin/python manage.py test main
 ```
 
 Запустить только тесты GitLab-интеграции:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py test main.tests.test_gitlab_integration
+cd netbox/netbox
+../venv/bin/python manage.py test main.tests.test_gitlab_integration
 ```

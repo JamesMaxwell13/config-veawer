@@ -31,7 +31,7 @@ PLUGINS = ["main"]
 PLUGINS_CONFIG = {
     "main": {
         "secret_key": "replace-with-a-long-random-plugin-secret",
-        "vcs_repo_path": "/home/andrew/bsuir/diploma/config-weaver-vcs",
+        "vcs_repo_path": "config-weaver-vcs",
         "scheduler_max_workers": 8,
     }
 }
@@ -51,17 +51,17 @@ PLUGINS_CONFIG = {
 Плагин ставится в virtualenv NetBox в editable-режиме:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install -e \
-  /home/andrew/bsuir/diploma/config-weaver
+netbox/venv/bin/python -m pip install -e \
+  config-weaver
 ```
 
 Проверка установленного пакета:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show config-weaver
+netbox/venv/bin/python -m pip show config-weaver
 ```
 
-Для локального окружения можно использовать `Makefile` из `/home/andrew/bsuir/diploma`:
+Для локального окружения можно использовать `Makefile` из `..`:
 
 ```bash
 make deps
@@ -126,7 +126,7 @@ WebSocket terminal:
 Локально нужно запускать:
 
 ```bash
-cd /home/andrew/bsuir/diploma
+cd ..
 make run
 ```
 
