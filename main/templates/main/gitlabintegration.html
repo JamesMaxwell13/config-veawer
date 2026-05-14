@@ -1,0 +1,38 @@
+{% extends 'generic/object.html' %}
+{% load render_table from django_tables2 %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <form method="post" action="{% url 'plugins:main:gitlabintegration_test' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-info"><i class="mdi mdi-lan-connect"></i> Test connection</button>
+  </form>
+  <form method="post" action="{% url 'plugins:main:gitlabintegration_sync' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-primary"><i class="mdi mdi-source-pull"></i> Sync from GitLab</button>
+  </form>
+  <form method="post" action="{% url 'plugins:main:gitlabintegration_push' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-success"><i class="mdi mdi-source-commit"></i> Push to GitLab</button>
+  </form>
+  <form method="post" action="{% url 'plugins:main:gitlabintegration_rebuild_paths' pk=object.pk %}" class="d-inline-block ms-1">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-warning"><i class="mdi mdi-folder-sync"></i> Rebuild paths</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  <div class="card mt-3">
+    <div class="card-header"><h2 class="card-title">GitLab mappings</h2></div>
+    <div class="card-body table-responsive">
+      {% render_table mapping_table 'inc/table.html' %}
+    </div>
+  </div>
+  <div class="card mt-3">
+    <div class="card-header"><h2 class="card-title">GitLab sync logs</h2></div>
+    <div class="card-body table-responsive">
+      {% render_table sync_log_table 'inc/table.html' %}
+    </div>
+  </div>
+{% endblock %}

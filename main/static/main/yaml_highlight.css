@@ -1,0 +1,153 @@
+.yaml-code-block,
+.cw-yaml-editor,
+pre:has(> code[data-yaml-highlight]) {
+  background: var(--tblr-bg-surface-secondary, var(--tblr-bg-surface, var(--bs-body-bg)));
+  color: var(--tblr-body-color, var(--bs-body-color));
+  border: 1px solid var(--tblr-border-color, var(--bs-border-color));
+  border-radius: 4px;
+  font-family: var(--tblr-font-monospace, "Cascadia Code", "Consolas", "Monaco", monospace);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.yaml-code-block,
+pre:has(> code[data-yaml-highlight]) {
+  padding: 0.875rem 1rem;
+}
+
+code[data-yaml-highlight],
+.cw-yaml-highlight {
+  white-space: pre;
+}
+
+.cw-yaml-editor {
+  position: relative;
+  min-height: 12rem;
+}
+
+.cw-yaml-editor__highlight,
+.cw-yaml-editor > textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: inherit;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0.875rem 1rem;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+
+.cw-yaml-editor__highlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cw-yaml-editor__highlight code {
+  display: block;
+  min-height: 100%;
+}
+
+.cw-yaml-editor > textarea {
+  position: relative;
+  z-index: 1;
+  display: block;
+  resize: vertical;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--tblr-body-color, var(--bs-body-color));
+  outline: 0;
+}
+
+.cw-yaml-editor > textarea::selection {
+  background: rgba(38, 79, 120, 0.9);
+  color: transparent;
+}
+
+.yaml-indent {
+  color: var(--tblr-border-color, var(--bs-border-color));
+}
+
+.yaml-marker,
+.yaml-punctuation {
+  color: var(--tblr-body-color, var(--bs-body-color));
+}
+
+.yaml-key {
+  color: #9cdcfe;
+}
+
+.yaml-key-interface {
+  color: #4ec9b0;
+}
+
+.yaml-key-command {
+  color: #c586c0;
+}
+
+.yaml-key-argument {
+  color: #dcdcaa;
+}
+
+.yaml-string {
+  color: #ce9178;
+}
+
+.yaml-number {
+  color: #b5cea8;
+}
+
+.yaml-bool,
+.yaml-null {
+  color: #569cd6;
+}
+
+.yaml-comment {
+  color: #6a9955;
+}
+
+.yaml-anchor,
+.yaml-alias {
+  color: #d7ba7d;
+}
+
+.yaml-tag {
+  color: #c586c0;
+}
+
+.yaml-error {
+  color: #f44747;
+}
+
+.yaml-diff-line {
+  display: block;
+  margin: 0 -1rem;
+  padding: 0 1rem;
+}
+
+.yaml-diff-add {
+  background: rgba(46, 160, 67, 0.22);
+  color: #89d185;
+}
+
+.yaml-diff-remove {
+  background: rgba(248, 81, 73, 0.22);
+  color: #f48771;
+}
+
+.yaml-diff-meta {
+  color: #808080;
+}
+
+.cw-command-body code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

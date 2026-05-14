@@ -1,0 +1,12 @@
+{% extends 'generic/object.html' %}
+
+{% block content %}
+  {{ block.super }}
+
+  <div class="card mt-3">
+    <h5 class="card-header">Task YAML</h5>
+    <div class="card-body">
+      <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ object.plan_yaml }}</code></pre>
+    </div>
+  </div>
+{% endblock %}

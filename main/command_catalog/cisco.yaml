@@ -1,0 +1,903 @@
+vendor: cisco
+templates:
+  - name: hostname
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Set device hostname.
+    bound_entity_type: device
+    bound_parameter: hostname
+    bound_direction: both
+    binding_priority: 10
+    params: [hostname]
+    command_body: |
+      hostname {hostname}
+
+  - name: enable_password
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Set enable password.
+    params: [password]
+    command_body: |
+      enable password {password}
+
+  - name: service_timestamps_debug
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure debug timestamps.
+    params: [format]
+    command_body: |
+      service timestamps debug {format}
+
+  - name: service_timestamps_log
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure log timestamps.
+    params: [format]
+    command_body: |
+      service timestamps log {format}
+
+  - name: service_password_encryption
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable service password encryption.
+    params: []
+    command_body: |
+      service password-encryption
+
+  - name: no_service_password_encryption
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Disable service password encryption.
+    params: []
+    command_body: |
+      no service password-encryption
+
+  - name: ip_routing
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv4 routing.
+    params: []
+    command_body: |
+      ip routing
+
+  - name: ip_classless
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable classless routing behavior.
+    params: []
+    command_body: |
+      ip classless
+
+  - name: ip_flow_export_version
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure NetFlow export version.
+    params: [version]
+    command_body: |
+      ip flow-export version {version}
+
+  - name: ip_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable Cisco Express Forwarding for IPv4.
+    params: []
+    command_body: |
+      ip cef
+
+  - name: no_ip_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable Cisco Express Forwarding for IPv4.
+    params: []
+    command_body: |
+      no ip cef
+
+  - name: ipv6_unicast_routing
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv6 unicast routing.
+    params: []
+    command_body: |
+      ipv6 unicast-routing
+
+  - name: ipv6_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable Cisco Express Forwarding for IPv6.
+    params: []
+    command_body: |
+      ipv6 cef
+
+  - name: no_ipv6_cef
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable Cisco Express Forwarding for IPv6.
+    params: []
+    command_body: |
+      no ipv6 cef
+
+  - name: no_ip_domain_lookup
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable DNS lookup for mistyped commands.
+    params: []
+    command_body: |
+      no ip domain lookup
+
+  - name: no_ip_http_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable HTTP server.
+    params: []
+    command_body: |
+      no ip http server
+
+  - name: no_ip_http_secure_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Disable HTTPS server.
+    params: []
+    command_body: |
+      no ip http secure-server
+
+  - name: no_cdp_log_mismatch_duplex
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Disable CDP duplex mismatch logging.
+    params: []
+    command_body: |
+      no cdp log mismatch duplex
+
+  - name: spanning_tree_mode
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure spanning-tree mode.
+    params: [mode]
+    command_body: |
+      spanning-tree mode {mode}
+
+  - name: spanning_tree_vlan_priority
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure spanning-tree priority for VLAN list.
+    params: [vlan_list, priority]
+    command_body: |
+      spanning-tree vlan {vlan_list} priority {priority}
+
+  - name: interface_description
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Set interface description.
+    bound_entity_type: interface
+    bound_parameter: description
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, description]
+    command_body: |
+      interface {interface}
+      description {description}
+
+  - name: interface_enter
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Enter interface configuration mode.
+    params: [interface]
+    command_body: |
+      interface {interface}
+
+  - name: description
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Set description under an interface.
+    bound_entity_type: interface
+    bound_parameter: description
+    bound_direction: both
+    binding_priority: 20
+    params: [interface, description]
+    command_body: |
+      interface {interface}
+      description {description}
+
+  - name: interface_shutdown
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Shut down an interface.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
+    params: [interface]
+    command_body: |
+      interface {interface}
+      shutdown
+
+  - name: interface_no_shutdown
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Enable an interface.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no shutdown
+
+  - name: interface_l3
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure routed interface IPv4 address.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      no switchport
+      ip address {ip} {mask}
+      no shutdown
+
+  - name: interface_ip
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure interface IPv4 address.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      ip address {ip} {mask}
+      no shutdown
+
+  - name: ip_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv4 address under an interface.
+    params: [interface, ip, mask]
+    command_body: |
+      interface {interface}
+      ip address {ip} {mask}
+
+  - name: no_ip_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Remove IPv4 address from an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no ip address
+
+  - name: ipv6_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv6 address under an interface.
+    params: [interface, address]
+    command_body: |
+      interface {interface}
+      ipv6 address {address}
+
+  - name: ipv6_enable
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enable IPv6 processing under an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ipv6 enable
+
+  - name: no_ipv6_nd_ra_suppress
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Allow IPv6 router advertisements under an interface.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      no ipv6 nd ra suppress
+
+  - name: mac_address
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface MAC address.
+    params: [interface, mac]
+    command_body: |
+      interface {interface}
+      mac-address {mac}
+
+  - name: ip_access_group
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Apply IPv4 access group to an interface.
+    params: [interface, acl, direction]
+    command_body: |
+      interface {interface}
+      ip access-group {acl} {direction}
+
+  - name: duplex
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface duplex.
+    bound_entity_type: interface
+    bound_parameter: duplex
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, duplex]
+    command_body: |
+      interface {interface}
+      duplex {duplex}
+
+  - name: speed
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface speed.
+    bound_entity_type: interface
+    bound_parameter: speed
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, speed]
+    command_body: |
+      interface {interface}
+      speed {speed}
+
+  - name: switchport_trunk_native_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk native VLAN.
+    bound_entity_type: interface
+    bound_parameter: native_vlan
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport trunk native vlan {vlan_id}
+
+  - name: switchport_trunk_allowed_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk allowed VLAN list.
+    bound_entity_type: interface
+    bound_parameter: tagged_vlans
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, vlan_list]
+    command_body: |
+      interface {interface}
+      switchport trunk allowed vlan {vlan_list}
+
+  - name: switchport_trunk_encapsulation
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure trunk encapsulation.
+    params: [interface, encapsulation]
+    command_body: |
+      interface {interface}
+      switchport trunk encapsulation {encapsulation}
+
+  - name: channel_group
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Assign interface to an EtherChannel group.
+    params: [interface, group, mode]
+    command_body: |
+      interface {interface}
+      channel-group {group} mode {mode}
+
+  - name: tunnel_source
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel source.
+    params: [interface, source]
+    command_body: |
+      interface {interface}
+      tunnel source {source}
+
+  - name: tunnel_mode
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel mode.
+    params: [interface, mode]
+    command_body: |
+      interface {interface}
+      tunnel mode {mode}
+
+  - name: tunnel_destination
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure tunnel destination.
+    params: [interface, destination]
+    command_body: |
+      interface {interface}
+      tunnel destination {destination}
+
+  - name: vlan_create
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Create VLAN and set its name.
+    params: [vlan_id, name]
+    command_body: |
+      vlan {vlan_id}
+      name {name}
+
+  - name: vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Enter VLAN configuration mode.
+    params: [vlan_id]
+    command_body: |
+      vlan {vlan_id}
+
+  - name: vlan_name
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set VLAN name.
+    params: [vlan_id, name]
+    command_body: |
+      vlan {vlan_id}
+      name {name}
+
+  - name: access_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure an access port VLAN.
+    bound_entity_type: interface
+    bound_parameter: access_vlan
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport mode access
+      switchport access vlan {vlan_id}
+      no shutdown
+
+  - name: switchport_mode_access
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set switchport access mode.
+    bound_entity_type: interface
+    bound_parameter: mode
+    bound_direction: both
+    binding_priority: 10
+    params: [interface]
+    command_body: |
+      interface {interface}
+      switchport mode access
+
+  - name: switchport_access_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Assign access VLAN to switchport.
+    bound_entity_type: interface
+    bound_parameter: access_vlan
+    bound_direction: both
+    binding_priority: 20
+    params: [interface, vlan_id]
+    command_body: |
+      interface {interface}
+      switchport access vlan {vlan_id}
+
+  - name: trunk_vlan
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Configure a trunk port allowed VLAN list.
+    bound_entity_type: interface
+    bound_parameter: tagged_vlans
+    bound_direction: both
+    binding_priority: 20
+    params: [interface, vlan_list]
+    command_body: |
+      interface {interface}
+      switchport mode trunk
+      switchport trunk allowed vlan {vlan_list}
+      no shutdown
+
+  - name: switchport_mode_trunk
+    platform: cisco_ios
+    operation_type: vlan
+    revision: 1
+    description: Set switchport trunk mode.
+    bound_entity_type: interface
+    bound_parameter: mode
+    bound_direction: both
+    binding_priority: 10
+    params: [interface]
+    command_body: |
+      interface {interface}
+      switchport mode trunk
+
+  - name: interface_mtu
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface MTU.
+    bound_entity_type: interface
+    bound_parameter: mtu
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, mtu]
+    command_body: |
+      interface {interface}
+      mtu {mtu}
+
+  - name: interface_poe_mode
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface PoE mode.
+    bound_entity_type: interface
+    bound_parameter: poe_mode
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, poe_mode]
+    command_body: |
+      interface {interface}
+      power inline {poe_mode}
+
+  - name: interface_poe_type
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface PoE type/profile.
+    bound_entity_type: interface
+    bound_parameter: poe_type
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, poe_type]
+    command_body: |
+      interface {interface}
+      power inline port {poe_type}
+
+  - name: default_gateway
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure default gateway for L2 switch management.
+    params: [gateway]
+    command_body: |
+      ip default-gateway {gateway}
+
+  - name: static_route
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv4 static route.
+    params: [network, mask, next_hop]
+    command_body: |
+      ip route {network} {mask} {next_hop}
+
+  - name: ipv6_route
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure IPv6 static route.
+    params: [prefix, interface, next_hop]
+    command_body: |
+      ipv6 route {prefix} {interface} {next_hop}
+
+  - name: numbered_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add numbered access-list permit rule.
+    params: [number, source, wildcard]
+    command_body: |
+      access-list {number} permit {source} {wildcard}
+
+  - name: numbered_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add numbered access-list deny rule.
+    params: [number, source, wildcard]
+    command_body: |
+      access-list {number} deny {source} {wildcard}
+
+  - name: standard_acl
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter standard named ACL configuration mode.
+    params: [name]
+    command_body: |
+      ip access-list standard {name}
+
+  - name: standard_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add permit rule to a standard named ACL.
+    params: [name, source, wildcard]
+    command_body: |
+      ip access-list standard {name}
+      permit {source} {wildcard}
+
+  - name: standard_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add deny rule to a standard named ACL.
+    params: [name, source, wildcard]
+    command_body: |
+      ip access-list standard {name}
+      deny {source} {wildcard}
+
+  - name: extended_acl
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter extended named ACL configuration mode.
+    params: [name]
+    command_body: |
+      ip access-list extended {name}
+
+  - name: extended_acl_permit
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add permit rule to an extended named ACL.
+    params: [name, protocol, src, src_wildcard, dst, dst_wildcard]
+    command_body: |
+      ip access-list extended {name}
+      permit {protocol} {src} {src_wildcard} {dst} {dst_wildcard}
+
+  - name: extended_acl_deny
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add deny rule to an extended named ACL.
+    params: [name, protocol, src, src_wildcard, dst, dst_wildcard]
+    command_body: |
+      ip access-list extended {name}
+      deny {protocol} {src} {src_wildcard} {dst} {dst_wildcard}
+
+  - name: extended_acl_permit_rule
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add flexible permit rule to an extended named ACL.
+    params: [name, rule]
+    command_body: |
+      ip access-list extended {name}
+      permit {rule}
+
+  - name: extended_acl_deny_rule
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Add flexible deny rule to an extended named ACL.
+    params: [name, rule]
+    command_body: |
+      ip access-list extended {name}
+      deny {rule}
+
+  - name: dhcp_pool
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Enter DHCP pool configuration mode.
+    params: [name]
+    command_body: |
+      ip dhcp pool {name}
+
+  - name: dhcp_pool_network
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool network.
+    params: [name, network, mask]
+    command_body: |
+      ip dhcp pool {name}
+      network {network} {mask}
+
+  - name: dhcp_pool_default_router
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool default router.
+    params: [name, gateway]
+    command_body: |
+      ip dhcp pool {name}
+      default-router {gateway}
+
+  - name: dhcp_pool_dns_server
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool DNS server.
+    params: [name, dns]
+    command_body: |
+      ip dhcp pool {name}
+      dns-server {dns}
+
+  - name: dhcp_pool_full
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure DHCP pool with network, gateway, and DNS.
+    params: [name, network, mask, gateway, dns]
+    command_body: |
+      ip dhcp pool {name}
+      network {network} {mask}
+      default-router {gateway}
+      dns-server {dns}
+
+  - name: dhcp_excluded_address
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Exclude DHCP address range.
+    params: [start_ip, end_ip]
+    command_body: |
+      ip dhcp excluded-address {start_ip} {end_ip}
+
+  - name: nat_inside
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Mark an interface as NAT inside.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ip nat inside
+
+  - name: nat_outside
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Mark an interface as NAT outside.
+    params: [interface]
+    command_body: |
+      interface {interface}
+      ip nat outside
+
+  - name: nat_overload
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure PAT overload using an ACL and outside interface.
+    params: [acl, interface]
+    command_body: |
+      ip nat inside source list {acl} interface {interface} overload
+
+  - name: nat_static
+    platform: cisco_ios
+    operation_type: ip
+    revision: 1
+    description: Configure static NAT mapping.
+    params: [inside_ip, outside_ip]
+    command_body: |
+      ip nat inside source static {inside_ip} {outside_ip}
+
+  - name: router_rip
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enter RIP router configuration mode.
+    params: []
+    command_body: |
+      router rip
+
+  - name: line_password
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line password.
+    params: [line, password]
+    command_body: |
+      line {line}
+      password {password}
+
+  - name: line_login
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable login under a line.
+    params: [line]
+    command_body: |
+      line {line}
+      login
+
+  - name: line_transport_input
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure allowed line transport input.
+    params: [line, transports]
+    command_body: |
+      line {line}
+      transport input {transports}
+
+  - name: line_exec_timeout
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line exec timeout.
+    params: [line, minutes, seconds]
+    command_body: |
+      line {line}
+      exec-timeout {minutes} {seconds}
+
+  - name: line_privilege_level
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line privilege level.
+    params: [line, level]
+    command_body: |
+      line {line}
+      privilege level {level}
+
+  - name: line_logging_synchronous
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Enable synchronous logging under a line.
+    params: [line]
+    command_body: |
+      line {line}
+      logging synchronous
+
+  - name: line_stopbits
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Configure line stop bits.
+    params: [line, stopbits]
+    command_body: |
+      line {line}
+      stopbits {stopbits}
+
+  - name: save_config
+    platform: cisco_ios
+    operation_type: custom
+    revision: 1
+    description: Save running configuration.
+    params: []
+    command_body: |
+      write memory

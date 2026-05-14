@@ -2,17 +2,78 @@
 
 {% block extra_controls %}
   {{ block.super }}
-  <a class="btn btn-info ms-1" href="{% url 'plugins:main:scheduledtask_preview' pk=object.pk %}">
-    <i class="mdi mdi-eye"></i> Preview Commands
-  </a>
-  <form method="post" action="{% url 'plugins:main:scheduledtask_run' pk=object.pk %}" class="d-inline-block ms-1">
+  <form method="post" action="{% url 'plugins:main:scheduledtask_run' pk=object.pk %}" class="d-inline-flex align-items-center gap-2 ms-1">
     {% csrf_token %}
-    <div class="form-check d-inline-block me-2">
+    <div class="form-check mb-0">
       <input class="form-check-input" type="checkbox" name="confirm_create_version" id="confirmVersion{{ object.pk }}" checked required>
       <label class="form-check-label" for="confirmVersion{{ object.pk }}">Create version</label>
     </div>
     <button type="submit" class="btn btn-primary">
-      <i class="mdi mdi-play"></i> Run Now
+      <i class="mdi mdi-play"></i> Run
     </button>
   </form>
+  <a class="btn btn-info ms-1" href="{% url 'plugins:main:scheduledtask_preview' pk=object.pk %}">
+    <i class="mdi mdi-eye"></i> Preview commands
+  </a>
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+
+  <div class="row mt-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">Task profile</h5>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Name</dt>
+            <dd class="col-sm-7">{{ object.task_name }}</dd>
+            <dt class="col-sm-5">Type</dt>
+            <dd class="col-sm-7">{{ object.get_task_type_display }}</dd>
+            <dt class="col-sm-5">Target device</dt>
+            <dd class="col-sm-7"><a href="{{ object.target_device.get_absolute_url }}">{{ object.target_device }}</a></dd>
+            <dt class="col-sm-5">Status</dt>
+            <dd class="col-sm-7">{{ object.get_status_display }}</dd>
+            <dt class="col-sm-5">Scheduled time</dt>
+            <dd class="col-sm-7">{{ object.schedule_time }}</dd>
+            <dt class="col-sm-5">Repeat interval</dt>
+            <dd class="col-sm-7">{{ object.run_every_seconds|default:"-" }}</dd>
+            <dt class="col-sm-5">Last run</dt>
+            <dd class="col-sm-7">{{ object.last_run_at|default:"-" }}</dd>
+            <dt class="col-sm-5">Max retries</dt>
+            <dd class="col-sm-7">{{ object.max_retries }}</dd>
+            <dt class="col-sm-5">Retry count</dt>
+            <dd class="col-sm-7">{{ object.retry_count }}</dd>
+            <dt class="col-sm-5">Created</dt>
+            <dd class="col-sm-7">{{ object.created }}</dd>
+            <dt class="col-sm-5">Updated</dt>
+            <dd class="col-sm-7">{{ object.last_updated }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">Execution result</h5>
+        <div class="card-body">
+          {% if object.result_message %}
+            <div class="mb-0 text-body" style="white-space: pre-wrap;">{{ object.result_message }}</div>
+          {% else %}
+            <span class="text-muted">No result yet.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mt-3">
+    <h5 class="card-header">Task YAML</h5>
+    <div class="card-body">
+      {% if object.task %}
+        <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ object.task }}</code></pre>
+      {% else %}
+        <span class="text-muted">Task YAML is not set.</span>
+      {% endif %}
+    </div>
+  </div>
 {% endblock %}

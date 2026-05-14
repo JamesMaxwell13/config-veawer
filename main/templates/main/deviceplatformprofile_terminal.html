@@ -1,0 +1,73 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+
+{% block title %}Terminal {{ object.device }}{% endblock %}
+
+{% block head %}
+  {{ block.super }}
+  <style>
+    #terminal-status {
+      font-size: .875rem;
+      font-weight: var(--tblr-font-weight-medium);
+      line-height: 1.25rem;
+    }
+
+    #terminal-input,
+    #terminal-input::placeholder {
+      font-family: var(--tblr-body-font-family);
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="d-grid align-items-center gap-3 mb-3" style="grid-template-columns: 1fr auto 1fr;">
+    <div>
+      <h1 class="h2 mb-1">Terminal {{ object.device }}</h1>
+      <div class="text-muted">
+        {{ object.get_platform_display }}{% if object.management_ip %} · {{ object.management_ip }}{% endif %}
+      </div>
+    </div>
+    <span id="terminal-status" class="terminal-status text-secondary text-center">Connecting</span>
+    <div class="btn-list align-items-center justify-content-end">
+      <a class="btn btn-secondary" href="{{ object.get_absolute_url }}">
+        <i class="mdi mdi-arrow-left"></i> Back to device
+      </a>
+      <button type="button" class="btn btn-danger" id="terminal-disconnect">
+        <i class="mdi mdi-lan-disconnect"></i> Disconnect
+      </button>
+    </div>
+  </div>
+
+  <div
+    id="device-terminal"
+    data-ws-path="{{ terminal_ws_path }}"
+    data-device-url="{{ object.get_absolute_url }}"
+    class="card"
+  >
+    <div class="card-body">
+      <pre
+        id="terminal-output"
+        class="bg-dark text-green p-3 rounded font-monospace"
+        style="height: 60vh; overflow: auto; white-space: pre-wrap;"
+      ></pre>
+      <div class="input-group mt-3">
+        <textarea
+          id="terminal-input"
+          class="form-control"
+          rows="2"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Type command and press Enter"
+        ></textarea>
+        <button type="button" class="btn btn-primary" id="terminal-send">
+          <i class="mdi mdi-send"></i> Send
+        </button>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block javascript %}
+  {{ block.super }}
+  <script src="{% static 'main/device_terminal.js' %}"></script>
+{% endblock %}

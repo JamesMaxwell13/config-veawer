@@ -1,0 +1,64 @@
+{% extends 'generic/object.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  <a class="btn btn-secondary ms-1" href="{% url 'plugins:main:commandtemplate_preview' pk=object.pk %}">
+    <i class="mdi mdi-eye-outline"></i> Preview
+  </a>
+{% endblock %}
+
+{% block content %}
+  {{ block.super }}
+  <div class="card mt-3">
+    <h5 class="card-header">Command template profile</h5>
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Name</dt>
+        <dd class="col-sm-9">{{ object.name }}</dd>
+
+        <dt class="col-sm-3">Vendor</dt>
+        <dd class="col-sm-9">{{ object.vendor }}</dd>
+
+        <dt class="col-sm-3">Platform</dt>
+        <dd class="col-sm-9">{{ object.platform }}</dd>
+
+        <dt class="col-sm-3">Operation type</dt>
+        <dd class="col-sm-9">{{ object.get_operation_type_display }}</dd>
+
+        <dt class="col-sm-3">Active</dt>
+        <dd class="col-sm-9">{{ object.is_active|yesno:"Yes,No" }}</dd>
+
+        <dt class="col-sm-3">Revision</dt>
+        <dd class="col-sm-9">{{ object.revision }}</dd>
+
+        <dt class="col-sm-3">Bound entity</dt>
+        <dd class="col-sm-9">{{ object.get_bound_entity_type_display|default:"-" }}</dd>
+
+        <dt class="col-sm-3">Bound parameter</dt>
+        <dd class="col-sm-9">
+          {% if object.bound_parameter %}
+            {% if object.bound_entity_type %}
+              <code>{{ object.bound_entity_type }}.{{ object.bound_parameter }}</code>
+            {% else %}
+              <code>{{ object.bound_parameter }}</code>
+            {% endif %}
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Bound direction</dt>
+        <dd class="col-sm-9">{{ object.get_bound_direction_display }}</dd>
+
+        <dt class="col-sm-3">Binding priority</dt>
+        <dd class="col-sm-9">{{ object.binding_priority }}</dd>
+
+        <dt class="col-sm-3">Last updated</dt>
+        <dd class="col-sm-9">{{ object.last_updated }}</dd>
+      </dl>
+      <hr class="my-3">
+      <h6 class="mb-2">Command body</h6>
+      <pre class="mb-0 yaml-code-block cw-command-body"><code>{{ object.command_body }}</code></pre>
+    </div>
+  </div>
+{% endblock %}

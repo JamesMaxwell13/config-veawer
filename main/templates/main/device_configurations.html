@@ -1,0 +1,101 @@
+{% extends 'dcim/device/base.html' %}
+
+{% block extra_controls %}
+  {{ block.super }}
+  {% if profile %}
+    <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=profile.pk %}" class="d-inline-block">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-info">
+        <i class="mdi mdi-refresh"></i> Refresh configuration
+      </button>
+    </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="row">
+    <div class="col col-12">
+      <div class="card">
+        <h5 class="card-header">Current configuration</h5>
+  <div class="card-body">
+    {% if desired_backup or actual_backup %}
+      <div class="alert alert-secondary py-2">
+        <div><strong>Desired (GitLab):</strong>
+          {% if desired_backup %}
+            <a href="{{ desired_backup.get_absolute_url }}">v{{ desired_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        <div><strong>Actual (Device runtime):</strong>
+          {% if actual_backup %}
+            <a href="{{ actual_backup.get_absolute_url }}">v{{ actual_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        {% if apply_state %}
+          <div><strong>Apply state:</strong> {{ apply_state }}</div>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if current_configuration %}
+            <div class="mb-2 text-secondary">
+              v{{ current_configuration.version }}
+              {% if current_configuration.version_name %} · {{ current_configuration.version_name }}{% endif %}
+              · {{ current_configuration.created }}
+            </div>
+            <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ current_yaml }}</code></pre>
+          {% else %}
+            <div class="text-muted">No configurations yet.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-3">
+    <div class="col col-12">
+      <div class="card">
+        <h5 class="card-header">Previous configurations</h5>
+        <div class="card-body">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Source</th>
+                <th>Checksum</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for configuration in previous_configurations %}
+                <tr>
+                  <td>v{{ configuration.version }}</td>
+                  <td>{{ configuration.version_name|default:"-" }}</td>
+                  <td>{{ configuration.created }}</td>
+                  <td>{{ configuration.source }}</td>
+                  <td><code>{{ configuration.config_checksum|default:"-" }}</code></td>
+                  <td class="text-end">
+                    <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=configuration.pk %}" class="d-inline-block">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-success">
+                        <i class="mdi mdi-backup-restore"></i> Apply to device
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="text-muted">No previous configurations yet.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,20 +1,22 @@
 {% extends 'base/layout.html' %}
 
-{% block title %}Сравнение конфигураций{% endblock %}
+{% block title %}Configuration diff{% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Сравнение конфигураций {{ device.name }}</span>
-    <a class="btn btn-sm btn-secondary" href="{% url 'plugins:main:configuration_versions' device_id=device.pk %}">Назад</a>
+    <span>Configuration diff {{ device.name }}</span>
+    {% if profile %}
+      <a class="btn btn-sm btn-secondary" href="{% url 'plugins:main:deviceplatformprofile_versions' pk=profile.pk %}">Back</a>
+    {% endif %}
   </div>
   <div class="card-body">
     {% if error %}
       <div class="alert alert-danger">{{ error }}</div>
     {% else %}
       <div class="mb-2 text-muted">v{{ from_backup.version }} -> v{{ to_backup.version }}</div>
-      <pre class="mb-0"><code>{% for line in diff %}{{ line }}
-{% endfor %}</code></pre>
+      <pre class="mb-0 yaml-code-block"><code data-yaml-diff>{% for line in diff %}{{ line.text }}{% if not forloop.last %}
+{% endif %}{% endfor %}</code></pre>
     {% endif %}
   </div>
 </div>

@@ -1,775 +1,618 @@
-## config-weaver
+# config-weaver
 
-Django/NetBox plugin for automated network configuration management.
+`config-weaver` - плагин для NetBox 4.x, предназначенный для управления конфигурациями сетевых устройств.
 
-### Установка и запуск с NetBox
+Плагин добавляет профили подключения к устройствам, зашифрованные учётные данные, встроенный каталог и пользовательские шаблоны команд, сценарии команд, планировщик задач, резервные копии конфигураций, YAML-представление конфигураций, ручной WebSocket-терминал, локальное Git/VCS-хранилище версий, двустороннюю GitLab-синхронизацию desired state и Swagger UI для REST API.
 
-Раздел описывает локальный запуск проекта из текущей структуры:
+## Документы
 
-```text
-/home/andrew/bsuir/diploma/
-├── config-weaver/      # код плагина
-└── netbox/             # исходники NetBox и virtualenv
-```
+- `README.md` - установка, запуск, пользовательские сценарии и API.
+- `README_NETBOX_CHANGE.md` - что нужно и не нужно менять в NetBox для работы плагина.
+- `main/command_catalog/README.md` - формат встроенного каталога команд и правила добавления шаблонов.
 
-#### 1. Требования
+## Структура Рабочего Каталога
 
-- Python 3.12+
-- PostgreSQL
-- Redis
-- Git
-- NetBox 4.5.x или совместимый NetBox 4.x
-
-Проверка локальных сервисов:
-
-```bash
-redis-cli ping
-```
-
-Ожидаемый ответ Redis:
+Ожидаемая структура локального workspace:
 
 ```text
-PONG
+../
+├── config-weaver/      # исходный код плагина
+├── config-weaver-vcs/  # опциональное Git-хранилище версий конфигураций
+└── netbox/             # исходный код NetBox и virtualenv
 ```
 
-PostgreSQL должен содержать базу и пользователя NetBox. Для локального стенда используется:
-
-```text
-database: netbox
-user: netbox
-password: NETBOX2026
-host: localhost
-port: 5432
-```
-
-Если база уже создана и права выданы, этот шаг повторять не нужно.
-
-#### 2. Активируйте окружение NetBox
+Если не указано иначе, команды ниже предполагают запуск из корня workspace. Команды NetBox выполняются из:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox
-source venv/bin/activate
+cd netbox/netbox
 ```
 
-В этом окружении `pip` может иметь битый wrapper после переноса директории. Надежный вариант установки пакетов:
+Команды, относящиеся к исходникам плагина, выполняются из:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install --upgrade pip
+cd config-weaver
 ```
 
-#### 3. Установите зависимости плагина
+## Требования
+
+- NetBox 4.x, проверялось с локальным деревом NetBox 4.5.x.
+- Python virtualenv: `netbox/venv`.
+- PostgreSQL, настроенный для NetBox.
+- Redis для задач и кеширования NetBox.
+- Python-зависимости плагина: `pyyaml`, `netmiko`, `paramiko`, `cryptography`, `channels`, `daphne`.
+- Установленный `git`, если требуется коммитить версии конфигураций в локальное VCS-хранилище.
+
+## Установка
+
+Установите runtime-зависимости в virtualenv NetBox:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install pyyaml netmiko paramiko cryptography
+netbox/venv/bin/python -m pip install \
+  pyyaml netmiko paramiko cryptography channels daphne
 ```
 
-#### 4. Установите плагин в editable-режиме
+Установите плагин в editable-режиме:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip install -e /home/andrew/bsuir/diploma/config-weaver
+netbox/venv/bin/python -m pip install -e \
+  config-weaver
 ```
 
-Проверка, что пакет установлен:
+Проверьте, что пакет доступен:
 
 ```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python -m pip show netbox-config-weaver
+netbox/venv/bin/python -m pip show config-weaver
 ```
 
-В выводе должен быть пакет `netbox-config-weaver`.
+Те же действия можно выполнить через `Makefile` из рабочего каталога:
 
-#### 5. Настройте NetBox
-
-Откройте файл:
-
-```text
-/home/andrew/bsuir/diploma/netbox/netbox/netbox/configuration.py
+```bash
+cd ..
+make setup
 ```
 
-Минимальная рабочая конфигурация для локального стенда:
+## Настройка NetBox
+
+Добавьте плагин в `configuration.py`.
+
+Имя Python-модуля плагина - `main`; публичный UI/API base URL - `config-weaver`.
 
 ```python
-ALLOWED_HOSTS = ['*']
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'netbox',
-        'USER': 'netbox',
-        'PASSWORD': 'NETBOX2026',
-        'HOST': 'localhost',
-        'PORT': '5432',
-        'CONN_MAX_AGE': 300,
-    }
-}
-
-REDIS = {
-    'tasks': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'USERNAME': '',
-        'PASSWORD': '',
-        'DATABASE': 0,
-        'SSL': False,
-    },
-    'caching': {
-        'HOST': 'localhost',
-        'PORT': 6379,
-        'USERNAME': '',
-        'PASSWORD': '',
-        'DATABASE': 1,
-        'SSL': False,
-    }
-}
-
-SECRET_KEY = 'replace-with-a-random-string-at-least-50-characters-long'
-
-API_TOKEN_PEPPERS = {
-    1: 'replace-with-a-random-string-at-least-50-characters-long',
-}
-
-PLUGINS = ['main']
+PLUGINS = ["main"]
 
 PLUGINS_CONFIG = {
-    'main': {
-        'secret_key': 'config-weaver-local-development-secret',
-        'vcs_repo_path': '/home/andrew/bsuir/diploma/config-weaver-vcs',
-        'scheduler_max_workers': 8,
+    "main": {
+        "secret_key": "replace-with-a-long-random-plugin-secret",
+        "vcs_repo_path": "config-weaver-vcs",
+        "scheduler_max_workers": 8,
+        "credential_reveal_max_attempts": 5,
+        "credential_reveal_window_seconds": 300,
     }
 }
 ```
 
-Важно: `PLUGINS = ['main']` соответствует имени плагина в `main/__init__.py`.
+Полный пример находится в `examples/netbox_plugin_configuration.py`.
 
-Короткий пример только с настройками плагина лежит в `examples/netbox_plugin_configuration.py`.
-Этот файл не загружается автоматически; значения из него нужно перенести в `configuration.py` NetBox.
+`secret_key` обязателен. Он используется для шифрования секретов: паролей устройств, GitLab access token и GitLab webhook secret. Значение нужно сохранить стабильным: если изменить ключ после первого использования, ранее зашифрованные значения станут нечитаемыми.
 
-#### 6. Проверьте конфигурацию Django
+`vcs_repo_path` необязателен. Если он не задан, плагин использует `MEDIA_ROOT/config_weaver_repo`.
+
+`scheduler_max_workers` необязателен. Некорректные значения заменяются на `8`, значения меньше `1` считаются равными `1`.
+
+`credential_reveal_max_attempts` и `credential_reveal_window_seconds` необязательны. Определяют лимит неуспешных подтверждений при раскрытии секретов в UI (по умолчанию `5` попыток за `300` секунд на пользователя и credential).
+
+## Архитектура (4 слоя)
+
+Код плагина разделен на 4 уровня:
+
+- `domain/` - правила предметной области (парсинг/валидация конфигурации, каталог команд, редактирование секретов в текстах).
+- `infrastructure/` - интеграции и технические детали (SSH/netmiko, Git/GitLab, криптография, репозитории).
+- `application/` - сценарии использования и оркестрация (task execution, refresh/apply, sync, security policy).
+- `presentation/` - UI и входные точки (forms, tables, views, filtersets, templates).
+
+Поток зависимостей: `presentation -> application -> domain/infrastructure`.  
+`domain` не зависит от `presentation`, а `infrastructure` не содержит бизнес-решений.
+
+## Безопасность Учётных Данных
+
+Что защищено:
+
+- Пароли устройств, `enable_secret`, GitLab token и webhook secret хранятся в БД в зашифрованном виде (`Fernet`, ключ от `PLUGINS_CONFIG['main']['secret_key']`).
+- Раскрытие секрета в UI требует повторного подтверждения логина/пароля текущего NetBox-пользователя.
+- Для раскрытия секрета добавлен rate limit (настраиваемый) и аудит попыток (`CredentialRevealAudit`: success/failed/blocked, user, IP, user-agent, причина).
+- При старте плагина выполняется проверка security-конфигурации (наличие `secret_key`; предупреждения для слабого/placeholder ключа).
+
+Ограничения и риски:
+
+- Секреты расшифровываются в памяти процесса NetBox в момент реального использования (SSH/GitLab), это неизбежно.
+- При компрометации хоста/процесса NetBox атакующий может получить доступ к расшифрованным данным в runtime.
+- Ротация `secret_key` без миграции данных сделает ранее зашифрованные значения нечитаемыми.
+
+Практические рекомендации:
+
+- Использовать длинный случайный `secret_key` (минимум 32+ символа) и хранить его в защищенном секрет-хранилище/ENV.
+- Ограничить доступ к UI/DB/логам и включить MFA/SSO для администраторов NetBox.
+- Периодически ротировать device/GitLab credentials и контролировать журнал `CredentialRevealAudit`.
+
+## База Данных И Начальные Данные
+
+Примените миграции:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py check
+cd netbox/netbox
+../venv/bin/python manage.py migrate
 ```
 
-Успешный результат:
+Синхронизируйте встроенные шаблоны команд:
+
+```bash
+cd netbox/netbox
+../venv/bin/python manage.py sync_command_templates
+```
+
+Предварительный просмотр синхронизации шаблонов без записи:
+
+```bash
+netbox/venv/bin/python netbox/netbox/manage.py sync_command_templates --dry-run
+```
+
+Базовая проверка Django:
+
+```bash
+netbox/venv/bin/python netbox/netbox/manage.py check
+```
+
+## Локальный Запуск
+
+Используйте `Makefile` из `..`.
+
+Запустить NetBox ASGI, RQ worker и цикл планировщика config-weaver:
+
+```bash
+cd ..
+make run
+```
+
+Запустить только ASGI web-процесс:
+
+```bash
+make run-web
+```
+
+Запустить только RQ worker:
+
+```bash
+make run-worker
+```
+
+Запустить только планировщик задач config-weaver:
+
+```bash
+make run-scheduler
+```
+
+Ручной терминал устройства требует ASGI/Daphne. Не используйте `manage.py runserver` для проверки терминала: он обслуживает только WSGI/HTTP и не поддерживает `/ws/plugins/config-weaver/...`.
+
+## Интерфейс
+
+После запуска плагин появляется в меню NetBox как `Config Weaver`.
+
+Основные страницы:
+
+- `/plugins/config-weaver/devices/` - профили подключения устройств.
+- `/plugins/config-weaver/credentials/` - зашифрованные SSH-учётные данные.
+- `/plugins/config-weaver/configurations/` - сохранённые конфигурации и backup-версии.
+- `/plugins/config-weaver/network-tasks/` - reusable YAML-сценарии команд.
+- `/plugins/config-weaver/gitlab/` - интеграции с GitLab.
+- `/plugins/config-weaver/gitlab/mappings/` - связи устройств NetBox с файлами GitLab.
+- `/plugins/config-weaver/gitlab/logs/` - журнал синхронизации GitLab.
+- `/plugins/config-weaver/tasks/` - планировщик задач.
+- `/plugins/config-weaver/templates/` - шаблоны команд.
+- `/plugins/config-weaver/uml/` - UML-описания.
+- `/plugins/config-weaver/api/docs/` - Swagger UI для REST API плагина.
+
+На странице профиля устройства доступны действия `CLI`, `Версии`, `Получить конфигурацию` и `Терминал`. На странице backup-конфигурации доступны YAML-представление, refresh/drift-check и отправка выбранной версии на устройство.
+
+Списковые страницы поддерживают стандартные NetBox bulk edit и bulk delete там, где это применимо.
+
+## REST API И Swagger
+
+Base URL REST API:
 
 ```text
-System check identified no issues (0 silenced).
+/api/plugins/config-weaver/
 ```
 
-#### 7. Примените миграции
-
-Сначала можно проверить миграции плагина:
-
-```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py showmigrations main
-```
-
-Затем применить все миграции NetBox и плагина:
-
-```bash
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py migrate
-```
-
-Если все уже применено, Django выведет:
+Swagger UI:
 
 ```text
-No migrations to apply.
+/plugins/config-weaver/api/docs/
 ```
 
-#### 8. Соберите статические файлы
-
-```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py collectstatic --noinput
-```
-
-После этого файлы должны лежать в:
+OpenAPI schema:
 
 ```text
-/home/andrew/bsuir/diploma/netbox/netbox/static
+/plugins/config-weaver/api/schema/
 ```
 
-#### 9. Создайте администратора NetBox
-
-Если суперпользователь еще не создан:
+Примеры:
 
 ```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py createsuperuser
+curl -H "Authorization: Token YOUR_API_TOKEN" \
+  http://netbox/api/plugins/config-weaver/devices/
+
+curl -H "Authorization: Token YOUR_API_TOKEN" \
+  http://netbox/api/plugins/config-weaver/configurations/by_device/?device_id=1
+
+curl -H "Authorization: Token YOUR_API_TOKEN" \
+  http://netbox/api/plugins/config-weaver/configurations/compare/?from=1\&to=2
 ```
 
-#### 10. Запустите NetBox с плагином
+Основные API resources:
 
-Для локального запуска при `DEBUG = False` используйте `--insecure`, иначе `runserver` не будет раздавать `/static/*` и NetBox покажет ошибку статики.
+- `/api/plugins/config-weaver/credentials/`
+- `/api/plugins/config-weaver/devices/`
+- `/api/plugins/config-weaver/templates/`
+- `/api/plugins/config-weaver/tasks/` - `NetworkTask`, reusable сценарии команд.
+- `/api/plugins/config-weaver/scheduled-tasks/` - задачи планировщика.
+- `/api/plugins/config-weaver/configurations/`
+- `/api/plugins/config-weaver/gitlab-integrations/`
+- `/api/plugins/config-weaver/gitlab-mappings/`
+- `/api/plugins/config-weaver/gitlab-sync-logs/`
+- `/api/plugins/config-weaver/gitlab/webhook/`
+- `/api/plugins/config-weaver/uml-configurations/`
 
-```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py runserver 0.0.0.0:8000 --insecure
-```
+Старые примеры `/api/plugins/main/...` неактуальны. NetBox регистрирует плагин по публичному `base_url = "config-weaver"`.
 
-NetBox будет доступен:
+## Рабочий Процесс Конфигураций
 
-```text
-http://127.0.0.1:8000/
-```
+1. Создайте `DeviceCredential`.
+2. Создайте `DevicePlatformProfile` для устройства `dcim.Device`.
+3. Нажмите `Получить конфигурацию` на странице профиля или на вкладке конфигураций устройства.
+4. Плагин подключится к устройству, получит running-config, сохранит новую `ConfigurationBackup`, если содержимое изменилось, и перенаправит на `/plugins/config-weaver/configurations/<id>/`.
+5. Страница конфигурации покажет YAML и доступные действия.
 
-Проверка ответа приложения:
+Если running-config не изменился, плагин перенаправит на текущую существующую backup-версию.
 
-```bash
-curl -I http://127.0.0.1:8000/
-```
+Обновление конфигурации использует профиль устройства и учётные данные. В тестовом окружении можно использовать обычные SSH-учётные данные, например `admin/admin`, но в production значения должны храниться только через `DeviceCredential`.
 
-Для закрытого NetBox нормальный ответ на главную страницу:
+## YAML-Формат Конфигураций
 
-```text
-HTTP/1.1 302 Found
-Location: /login/?next=/
-```
+Raw running-config преобразуется в YAML плагина.
 
-Проверка статики:
+Текущая версия схемы - `2`. Схема `1` остаётся читаемой для старых backup-версий.
 
-```bash
-curl -I http://127.0.0.1:8000/static/netbox.css
-curl -I http://127.0.0.1:8000/static/netbox.js
-curl -I http://127.0.0.1:8000/static/setmode.js
-```
+Схема `2` разделяет:
 
-Все три запроса должны возвращать `200 OK`.
+- `operations` - глобальные команды, сопоставленные с шаблонами команд.
+- `sections` - контекстные блоки, например `interface`, `line`, `router`, `ip access-list`, `gatekeeper` и похожие Cisco-секции.
+- `raw_commands` - несопоставленные глобальные команды верхнего уровня.
 
-#### 11. Проверьте плагин в интерфейсе
-
-1. Откройте `http://127.0.0.1:8000/`.
-2. Войдите под суперпользователем.
-3. Проверьте, что в меню появился раздел `config-weaver`.
-4. Проверьте страницы `Устройства`, `Конфигурации`, `Планировщик задач` и `Учетные данные`.
-
-#### 12. Запуск планировщика задач
-
-Ручной запуск всех просроченных задач:
-
-```bash
-cd /home/andrew/bsuir/diploma/netbox/netbox
-/home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py run_due_tasks
-```
-
-Для периодического запуска можно добавить cron:
-
-```bash
-* * * * * cd /home/andrew/bsuir/diploma/netbox/netbox && /home/andrew/bsuir/diploma/netbox/venv/bin/python manage.py run_due_tasks >> /tmp/config-weaver.log 2>&1
-```
-
-#### 13. Production-вариант
-
-В production не используйте `runserver --insecure`. Нужно:
-
-1. Выполнить `collectstatic --noinput`.
-2. Запустить NetBox через gunicorn/uwsgi.
-3. Настроить nginx или другой HTTP-сервер на раздачу `STATIC_ROOT`.
-4. Проксировать динамические запросы в gunicorn/uwsgi.
-
-Пример systemd-сервиса:
-
-```ini
-[Unit]
-Description=NetBox with config-weaver plugin
-After=network.target
-
-[Service]
-Type=notify
-User=netbox
-Group=netbox
-WorkingDirectory=/home/andrew/bsuir/diploma/netbox/netbox
-Environment="PATH=/home/andrew/bsuir/diploma/netbox/venv/bin"
-ExecStart=/home/andrew/bsuir/diploma/netbox/venv/bin/gunicorn --bind 127.0.0.1:8001 netbox.wsgi
-
-[Install]
-WantedBy=multi-user.target
-```
-
-#### 14. Частые проблемы запуска
-
-Ошибка статики в браузере:
-
-- Убедитесь, что выполнен `collectstatic --noinput`.
-- Для локального `runserver` при `DEBUG = False` используйте `--insecure`.
-- Проверьте `curl -I http://127.0.0.1:8000/static/netbox.css`.
-
-Ошибка подключения к Redis:
-
-- Проверьте `redis-cli ping`.
-- Убедитесь, что Redis слушает `localhost:6379`.
-
-Ошибка подключения к PostgreSQL:
-
-- Проверьте имя базы, пользователя и пароль в `configuration.py`.
-- Убедитесь, что пользователь `netbox` имеет права на базу `netbox`.
-
-Плагин не появился:
-
-- Проверьте `PLUGINS = ['main']`.
-- Проверьте установку: `python -m pip show netbox-config-weaver`.
-- Выполните `python manage.py check`.
-- Перезапустите NetBox.
-
-#### 15. Переменные окружения
-
-Для более безопасной конфигурации можно хранить секреты в окружении:
-
-```bash
-export NETBOX_SECRET_KEY='your-very-secret-key'
-export CONFIG_WEAVER_SECRET_KEY='config-weaver-secret-key'
-export CONFIG_WEAVER_VCS_REPO='/home/andrew/bsuir/diploma/config-weaver-vcs'
-```
-
-И использовать их в `configuration.py`:
-
-```python
-import os
-
-SECRET_KEY = os.getenv('NETBOX_SECRET_KEY')
-
-PLUGINS_CONFIG = {
-    'main': {
-        'secret_key': os.getenv('CONFIG_WEAVER_SECRET_KEY', 'change-this'),
-        'vcs_repo_path': os.getenv('CONFIG_WEAVER_VCS_REPO'),
-        'scheduler_max_workers': 8,
-    }
-}
-```
-
-### Структура проекта
-
-- `main/domain/` — доменный слой: разбор YAML-плана, генерация и валидация команд, редактирование секретов.
-- `main/application/` — слой сценариев использования: выполнение задач, preview команд, конфигурации, UML preview.
-- `main/infrastructure/` — внешние адаптеры: SSH/Netmiko/Paramiko, Git VCS, Fernet-шифрование, ORM-репозитории.
-- `main/presentation/` — UI-адаптер NetBox: формы, фильтры, таблицы, HTML views.
-- `main/api/` — REST API-адаптер.
-- `main/models.py` — Django/NetBox модели плагина.
-- `main/management/commands/` — management-команды.
-- `main/migrations/` — одна начальная миграция `0001_initial.py`.
-- `main/templates/main/` — шаблоны UI NetBox.
-
-### Что делает плагин
-
-- Управляет конфигурациями сетевых устройств (Cisco, D-Link)
-- Генерирует команды из сетевых задач
-- Применяет команды к устройствам
-- Делает резервные копии конфигураций в Git
-- Поддерживает система версий с просмотром дифов между версиями
-- Поддерживает автоматическое создание версий при отправке конфига на устройство
-- Поддерживает планировщик задач и автозапуск
-- Хранит UML-конфигурации (PlantUML/Mermaid/JSON)
-- Кеширует тяжелые операции (парсинг, шаблоны, preview)
-
-### Описание классов плагина
-
-#### `main/__init__.py`
-
-`NetBoxConfigWeaverConfig` — конфигурация NetBox-плагина.
-- Атрибуты: `name`, `verbose_name`, `description`, `version`, `author`, `author_email`, `base_url`, `required_settings`, `default_settings`, `min_version`, `max_version`.
-- Методы: собственных методов нет; класс используется NetBox для регистрации плагина.
-
-#### `main/apps.py`
-
-`NetboxConfigWeaverAppConfig` — Django `AppConfig` для приложения.
-- Атрибуты: `default_auto_field`, `name`, `verbose_name`.
-- Методы: собственных методов нет.
-
-#### `main/models.py`
-
-`DeviceCredential` — учетные данные для подключения к сетевому устройству.
-- Поля и атрибуты: `AUTH_PASSWORD`, `AUTH_CHOICES`, `name`, `auth_method`, `username`, `password`, `enable_secret`, `ssh_port`, `timeout`, `use_enable`, `is_active`.
-- Методы: `__str__()` возвращает имя credential; `password_plain` расшифровывает пароль; `enable_secret_plain` расшифровывает enable secret; `save()` шифрует секреты перед сохранением.
-
-`CommandTemplate` — шаблон CLI-команды под вендора, платформу и тип операции.
-- Поля и атрибуты: `OP_INTERFACE`, `OP_VLAN`, `OP_IP`, `OP_CUSTOM`, `OP_CHOICES`, `name`, `vendor`, `platform`, `operation_type`, `command_body`, `is_active`, `revision`.
-- Методы: `__str__()` возвращает читаемое имя шаблона; `render(params)` подставляет параметры в `command_body`.
-
-`NetworkTask` — описание сетевой задачи и YAML-плана конфигурации.
-- Поля и атрибуты: `PLAN_YAML`, `PLAN_CHOICES`, `name`, `description`, `device_task`, `plan_format`, `plan_yaml`, `plan_checksum`, `enabled`, `last_validated_at`.
-- Методы: `__str__()` возвращает имя задачи; `short_description` возвращает первые 100 символов описания.
-
-`ConfigurationBackup` — версия сохраненной конфигурации устройства.
-- Поля и атрибуты: `device`, `task`, `version`, `version_name`, `config_text`, `source`, `commit_hash`, `config_checksum`, `redacted`.
-- Методы: `__str__()` возвращает устройство и номер версии.
-
-`DevicePlatformProfile` — профиль устройства: вендор, платформа, management IP и credential.
-- Поля и атрибуты: `VENDOR_CISCO`, `VENDOR_DLINK`, `VENDOR_CHOICES`, `PLATFORM_CISCO_IOS`, `PLATFORM_CISCO_XE`, `PLATFORM_CISCO_NXOS`, `PLATFORM_DLINK_DS`, `PLATFORM_DLINK_DGS`, `PLATFORM_CHOICES`, `device`, `credential`, `vendor`, `platform`, `management_ip`, `command_timeout`, `enabled`.
-- Методы: `__str__()` возвращает устройство и платформу; `clean()` проверяет соответствие платформы выбранному вендору.
-
-`ScheduledTask` — задача планировщика для применения сценария, сохранения конфигурации или healthcheck.
-- Поля и атрибуты: `TYPE_APPLY_SCENARIO`, `TYPE_BACKUP`, `TYPE_HEALTHCHECK`, `TYPE_CHOICES`, `STATUS_PENDING`, `STATUS_RUNNING`, `STATUS_SUCCESS`, `STATUS_FAILED`, `STATUS_CHOICES`, `task_name`, `task_type`, `target_device`, `task`, `schedule_time`, `status`, `result_message`, `run_every_seconds`, `last_run_at`, `max_retries`, `retry_count`.
-- Методы: `__str__()` возвращает имя задачи; `is_due()` проверяет, пора ли запускать задачу; `update_status(status, message)` обновляет статус, сообщение и время последнего запуска.
-
-`UMLConfiguration` — сохраненное UML/Mermaid/JSON описание, связанное с задачей или устройством.
-- Поля и атрибуты: `TYPE_PLANTUML`, `TYPE_MERMAID`, `TYPE_JSON`, `TYPE_CHOICES`, `name`, `diagram_type`, `task`, `device`, `source_text`, `rendered_svg`, `checksum`, `revision`, `is_active`.
-- Методы: `__str__()` возвращает имя и ревизию.
-
-#### `main/domain/configuration.py`
-
-`ConfigValidationError` — доменное исключение ошибок плана или команд.
-- Поля и атрибуты: наследует стандартные атрибуты `Exception`.
-- Методы: собственных методов нет.
-
-`NetworkPlanParser` — парсер и нормализатор YAML-плана.
-- Поля и атрибуты: `INTERFACE_ALIASES`.
-- Методы: `parse_plan(raw_yaml)` возвращает словарь из YAML; `normalize_interfaces(config)` раскрывает короткие имена интерфейсов и валидирует структуру.
-
-`CommandGenerator` — генератор CLI-команд из плана и шаблонов.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `generate_interface_config(interface)` строит команды для интерфейса; `_resolve_template_key(operation, profile)` выбирает ключ шаблона; `generate_commands(plan, templates, profile)` возвращает общий список команд.
-
-`ConfigurationValidator` — валидатор команд перед применением.
-- Поля и атрибуты: `FORBIDDEN_PATTERNS`.
-- Методы: `validate_commands(commands)` возвращает `(is_valid, errors)`.
-
-#### `main/domain/security.py`
-
-`SENSITIVE_PATTERNS` — набор регулярных выражений для поиска секретов.
-
-Функция `redact_secrets(text)` заменяет найденные пароли, secret и SNMP community на `<REDACTED>`.
-
-#### `main/application/backups.py`
-
-`ConfigurationService` — use case для сохранения и сравнения конфигураций.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `save_backup(device, config_text, task=None)` сохраняет конфигурацию через VCS-адаптер; `compare_versions(first, second)` возвращает unified diff.
-
-#### `main/application/tasks.py`
-
-`TaskExecutor` — use case выполнения задач планировщика.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `preview_commands(task)` строит команды без применения; `_apply_commands(profile, task, commands)` применяет команды и сохраняет конфигурацию; `_run_apply_scenario(task)` запускает задачу применения; `_run_backup(task)` сохраняет конфигурацию; `_run_healthcheck(task)` проверяет SSH-сессию; `restore_backup_to_device(backup)` активирует выбранную конфигурацию на устройстве; `_reschedule_if_periodic(task)` переносит периодическую задачу; `run_task(task)` выполняет задачу с retry-логикой; `run_due_tasks()` запускает все просроченные задачи.
-
-#### `main/application/uml.py`
-
-`UMLConfigurationService` — use case для UML-конфигураций.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `calculate_checksum(source_text)` считает SHA-256; `save_with_checksum(uml)` сохраняет UML с checksum; `render_preview(uml)` возвращает SVG-preview.
-
-#### `main/infrastructure/crypto.py`
-
-Функция `_derive_key(raw)` получает Fernet-ключ из строки.
-
-Функция `_get_fernet()` создает Fernet из `PLUGINS_CONFIG['main']['secret_key']`.
-
-Функция `is_encrypted(value)` проверяет префикс `enc::`.
-
-Функция `encrypt_value(value)` шифрует непустое значение.
-
-Функция `decrypt_value(value)` расшифровывает значение и выбрасывает `RuntimeError` при неверном ключе.
-
-#### `main/infrastructure/network.py`
-
-`ConnectionSessionError` — исключение ошибок подключения.
-- Поля и атрибуты: наследует стандартные атрибуты `Exception`.
-- Методы: собственных методов нет.
-
-`ConnectionSession` — адаптер SSH-сессии поверх Netmiko/Paramiko.
-- Поля и атрибуты: `NETMIKO_DEVICE_MAP`, `RUNNING_CONFIG_COMMANDS`, `SAVE_COMMANDS`, `session`, `backend`, `platform`.
-- Методы: `__init__()` инициализирует пустую сессию; `connect(host, platform, credential, prefer='netmiko')` подключается к устройству; `_connect_netmiko(params, credential)` создает Netmiko-сессию; `_connect_paramiko(params)` создает Paramiko-сессию; `disconnect()` закрывает сессию; `is_alive()` проверяет активность; `send_config_set(commands)` применяет команды и сохраняет конфигурацию; `get_running_config()` читает running-config.
-
-`DeviceConnectionManager` — инфраструктурный сервис профиля и синхронизации running-config.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `get_profile(device)` возвращает активный профиль устройства; `should_verify_saved_config(device)` решает, нужна ли проверка сохраненной конфигурации; `verify_and_sync_running_config(device, running_config)` сохраняет контрольную конфигурацию при отсутствии версии или drift.
-
-Функция `connect_device_cli(device, prefer='netmiko', verify_saved_config=True)` возвращает `(session, profile, check_result)`.
-
-#### `main/infrastructure/repositories.py`
-
-`ConfigurationRepository` — ORM-репозиторий для шаблонов и конфигураций.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `latest_backup_for_device(device_id)` возвращает последнюю версию; `compare_versions(first, second)` возвращает unified diff; `active_templates()` возвращает активные шаблоны с кешированием.
-
-#### `main/infrastructure/vcs.py`
-
-`BackupWriteResult` — dataclass результата записи конфигурации.
-- Поля: `version`, `commit_hash`, `file_name`.
-- Методы: dataclass-методы создаются автоматически.
-
-`ConfigurationVCS` — Git-backed адаптер хранения версий конфигураций.
-- Поля и атрибуты: собственных атрибутов нет.
-- Методы: `repo_path()` возвращает и инициализирует Git-репозиторий; `safe_file_name(raw)` нормализует имя файла; `next_version(device)` вычисляет следующий номер версии; `build_version_name(device, dt=None)` строит имя версии; `write_backup(device, config_text, task=None, source='runtime')` пишет JSON в Git и создает `ConfigurationBackup` в БД.
-
-#### `main/presentation/forms.py`
-
-`DeviceCredentialForm` — UI-форма учетных данных.
-- Поля и атрибуты: `password`, `enable_secret`, поля модели из `Meta.fields`.
-- Методы: `__init__()` делает пароль необязательным при редактировании; `clean()` сохраняет старые секреты, если новые не введены.
-
-`DevicePlatformProfileForm` — UI-форма профиля устройства.
-- Поля и атрибуты: `device`, `credential`, поля модели из `Meta.fields`.
-- Методы: собственных методов нет.
-
-`CommandTemplateForm`, `NetworkTaskForm`, `ConfigurationBackupForm`, `ScheduledTaskForm`, `UMLConfigurationForm` — UI-формы соответствующих моделей.
-- Поля и атрибуты: наборы `Meta.fields`; у `ScheduledTaskForm` есть `target_device` и `task`.
-- Методы: собственных методов нет.
-
-#### `main/presentation/filtersets.py`
-
-`DeviceCredentialFilterSet`, `DevicePlatformProfileFilterSet`, `CommandTemplateFilterSet`, `ConfigurationBackupFilterSet`, `UMLConfigurationFilterSet` — фильтры UI/API для соответствующих моделей.
-- Поля и атрибуты: `Meta.model`, `Meta.fields`.
-- Методы: собственных методов нет.
-
-`NetworkTaskFilterSet` — фильтр сетевых задач.
-- Поля и атрибуты: `Meta.model`, `Meta.fields`.
-- Методы: `search(queryset, name, value)` ищет по имени, описанию и `device_task`.
-
-`ScheduledTaskFilterSet` — фильтр задач планировщика.
-- Поля и атрибуты: `Meta.model`, `Meta.fields`.
-- Методы: `search(queryset, name, value)` ищет по имени задачи и сообщению результата.
-
-#### `main/presentation/tables.py`
-
-`DeviceCredentialTable`, `CommandTemplateTable`, `NetworkTaskTable`, `ConfigurationBackupTable`, `DevicePlatformProfileTable`, `ScheduledTaskTable`, `UMLConfigurationTable` — таблицы NetBox UI.
-- Поля и атрибуты: `Meta.model`, `Meta.fields`.
-- Методы: собственных методов нет.
-
-#### `main/presentation/views.py`
-
-List/detail/edit/delete классы `DeviceCredential*`, `DevicePlatformProfile*`, `CommandTemplate*`, `NetworkTask*`, `ConfigurationBackup*`, `ScheduledTask*`, `UMLConfiguration*` — стандартные NetBox views.
-- Поля и атрибуты: `queryset`, `table`, `filterset`, `form` в зависимости от типа view.
-- Методы: собственных методов нет, кроме наследуемых NetBox generic views.
-
-`ConfigurationBackupRestoreView` — action view активации сохраненной конфигурации.
-- Методы: `post(request, pk)` запускает активацию и возвращает пользователя на страницу конфигурации.
-
-`ConfigurationVersionListView` — view списка версий устройства.
-- Поля и атрибуты: `template_name`.
-- Методы: `get_context_data(**kwargs)` добавляет устройство и список версий.
-
-`ConfigurationVersionDiffView` — view сравнения двух версий.
-- Поля и атрибуты: `template_name`.
-- Методы: `get_context_data(**kwargs)` добавляет diff или ошибку параметров.
-
-`ScheduledTaskRunNowView` — action view ручного запуска задачи.
-- Методы: `post(request, pk)` требует подтверждение создания версии и запускает задачу.
-
-`ScheduledTaskPreviewView` — view preview команд.
-- Поля и атрибуты: `template_name`.
-- Методы: `get_context_data(**kwargs)` добавляет команды или ошибки preview.
-
-`UMLConfigurationRenderView` — action view генерации SVG preview.
-- Методы: `post(request, pk)` обновляет `rendered_svg` и checksum.
-
-`UMLConfigurationPreviewView` — view просмотра SVG preview.
-- Поля и атрибуты: `template_name`.
-- Методы: `get_context_data(**kwargs)` добавляет UML-объект и SVG.
-
-#### `main/api/serializers.py`
-
-`DeviceCredentialSerializer` — DRF-сериализатор credential.
-- Поля и атрибуты: `password`, `enable_secret` как `write_only`, `Meta.model`, `Meta.fields`.
-- Методы: собственных методов нет.
-
-`CommandTemplateSerializer`, `DevicePlatformProfileSerializer`, `NetworkTaskSerializer`, `ConfigurationBackupSerializer`, `ScheduledTaskSerializer`, `UMLConfigurationSerializer` — DRF-сериализаторы моделей.
-- Поля и атрибуты: `Meta.model`, `Meta.fields`.
-- Методы: собственных методов нет.
-
-#### `main/api/views.py`
-
-`DeviceCredentialViewSet`, `CommandTemplateViewSet`, `DevicePlatformProfileViewSet`, `NetworkTaskViewSet`, `ScheduledTaskViewSet`, `UMLConfigurationViewSet` — CRUD API viewset-классы.
-- Поля и атрибуты: `queryset`, `serializer_class`.
-- Методы: наследуют CRUD-поведение `NetBoxModelViewSet`.
-
-`ConfigurationBackupViewSet` — CRUD API viewset для конфигураций и версий.
-- Поля и атрибуты: `queryset`, `serializer_class`.
-- Методы: `by_device(request)` возвращает версии одного устройства; `compare(request)` сравнивает две версии и возвращает diff.
-
-#### `main/api/urls.py`, `main/urls.py`, `main/navigation.py`
-
-Эти модули не объявляют собственных классов. Они регистрируют REST endpoints, HTML routes и меню NetBox.
-
-#### `main/management/commands/run_due_tasks.py`
-
-`Command` — Django management command для запуска просроченных задач.
-- Поля и атрибуты: `help`.
-- Методы: `handle(*args, **options)` запускает `TaskExecutor.run_due_tasks()` и печатает количество выполненных задач.
-
-### Security hardening
-
-- Credentials encrypted at rest (`password`, `enable_secret`)
-- Secret redaction before backup persistence
-- Write-only API fields for credential secrets
-- Required plugin secret in `PLUGINS_CONFIG['main']['secret_key']`
-
-### Caching
-
-- Parsed plan cache by content hash
-- Active templates cache
-- Device profile cache
-- Preview commands cache per scheduled task and network task revision
-
-### Dependencies
-
-- `Django` / NetBox plugin API
-- `PyYAML`
-- `netmiko`
-- `paramiko`
-- `cryptography`
-- system `git` CLI
-
-### Runtime scheduler
-
-```bash
-python manage.py run_due_tasks
-```
-
-The scheduler executes due tasks in a bounded thread pool. By default up to
-8 tasks can run in parallel. NetBox administrators can change the limit in
-`PLUGINS_CONFIG['main']['scheduler_max_workers']`; invalid values fall back to
-8 and values lower than 1 are treated as 1.
-
-### Version System
-
-Основные возможности:
-
-- **Автоматическое создание версий**: Каждый раз конфигурация отправляется на устройство или выполняется ручное резервное копирование, автоматически сохраняется новая версия в базе данных и Git.
-
-- **Наименование версий**: Каждая версия отражается автоматически генерируемым именем формата: **YYYY-MM-DD-HH-MM-device_name**
-  - Пример: `2026-04-28-14-35-switch-core-01`
-  - Время генерируется в UTC и сохраняется в JSON файлах Git репозитория
-
-- **Просмотр версий**: В UI доступна таблица всех версий для текущего устройства с сортировкой по времени создания (новейшие выше).
-
-- **Наглядное сравнение конфигураций**: Выберите две версии для построения unified diff - строки изображены с префиксами `+`, `-`, ` ` и `@@`.
-
-- **Подтверждение на исполнение**: Процесс на исполнение задач в UI требует утверждение через чекбокс `confirm_create_version`.
-
-#### API для работы с версиями
-
-**Получить все версии для устройства:**
-
-```
-GET /api/plugins/main/configurations/by_device/?device_id=123
-```
-
-**Сравнить две версии:**
-
-```
-GET /api/plugins/main/configurations/compare/?from=1&to=2
-```
-
-#### Git репозиторий
-
-Данные во всех версиях сохраняются в Git репозитории (JSON файлы) с commit-сообщениями в формате: `backup(device_name): version N`
-
-Конфигурация сохраняется в JSON с полями: device, version, version_name, saved_at, task, source, config (redacted)
-
-### Решение проблем
-
-#### Плагин не появляется в меню NetBox
-
-1. Проверьте, что `main` добавлен в список `PLUGINS` в `configuration.py`
-2. Выполните миграции: `python manage.py migrate main`
-3. Перезагрузите NetBox: `systemctl restart netbox` или перезапустите `runserver`
-4. Проверьте логи: `journalctl -u netbox -n 50`
-
-#### Ошибка при подключении к устройству
-
-- **Connection refused**: Проверьте IP адрес и SSH порт в `DevicePlatformProfile`
-- **Authentication failed**: Проверьте учетные данные в `DeviceCredential`
-- **Timeout**: Увеличьте `timeout` в credential или проверьте сетевую доступность
-
-#### Git репозиторий не инициализируется
-
-Убедитесь, что директория настроена правильно и у пользователя есть права на запись:
-
-```bash
-# Если директория не существует, она создастся автоматически
-# Проверьте права доступа
-mkdir -p /home/andrew/bsuir/diploma/config-weaver-vcs
-chmod 755 /home/andrew/bsuir/diploma/config-weaver-vcs
-```
-
-#### Ошибка при работе с YAML планом
-
-```
-ConfigValidationError: YAML parsing error...
-```
-
-1. Проверьте синтаксис YAML в план текста (используйте валидатор)
-2. Убедитесь, что структура соответствует ожидаемому формату
-3. Проверьте кодировку файла (должно быть UTF-8)
-
-#### Задачи не запускаются по расписанию
-
-1. Проверьте, что cron или systemd timer настроены правильно
-2. Убедитесь, что время сервера синхронизировано (NTP)
-3. Проверьте статус задач в UI: версия в статус `PENDING` должна иметь время в прошлом
-4. Проверьте логи: `journalctl -u config-weaver-tasks.timer`
-
-#### Высокое использование памяти
-
-Плагин кеширует parsed plans и templates в памяти. Если памяти недостаточно:
-
-```python
-# В configuration.py отключите кеширование для плана
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'TIMEOUT': 300,  # 5 минут
-    }
-}
-```
-
-Или используйте Redis:
-
-```python
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-    }
-}
-```
-
-### Примеры использования
-
-#### Создание простой сетевой задачи (NetworkTask)
+Пример:
 
 ```yaml
-# YAML план
-interfaces:
-  - name: "Gi0/0"
-    description: "WAN uplink"
-    ip: "203.0.113.1"
-    netmask: "255.255.255.0"
-    
-vlans:
-  - id: 100
-    name: "Management"
-  - id: 200
-    name: "Users"
+schema_version: 2
+device:
+  id: 1
+  name: sw-core-01
+platform: cisco_ios
+source: runtime
+operations: []
+sections:
+  - header: interface GigabitEthernet0/1
+    operations: []
+    raw_commands:
+      - description Uplink
+      - no shutdown
+raw_commands:
+  - hostname sw-core-01
 ```
 
-#### REST API примеры
+YAML также может содержать сценарий команд для `ScheduledTask`:
+
+```yaml
+interfaces:
+  - name: gi0/1
+    description: Uplink
+    shutdown: false
+operations:
+  - name: access_vlan
+    params:
+      interface: GigabitEthernet0/1
+      vlan_id: 10
+```
+
+Перед отправкой команд на устройство они проходят существующие этапы:
+
+- `NetworkPlanParser`;
+- `CommandGenerator`;
+- `ConfigurationValidator`;
+- добавление команды сохранения конфигурации для поддерживаемой платформы.
+
+## Локальное VCS-Хранилище
+
+Локальное Git/VCS-хранилище плагина не заменяется GitLab-интеграцией.
+
+Его назначение:
+
+- журнал фактически сохранённых конфигураций;
+- backup-версии перед применением изменений;
+- версии, созданные после успешного применения команд;
+- локальная история, независимая от GitLab desired state.
+
+GitLab используется как репозиторий желаемого состояния конфигураций устройств. Локальный VCS остаётся журналом фактических операций плагина.
+
+## Интеграция С GitLab
+
+Config Weaver поддерживает двустороннюю синхронизацию YAML-конфигураций устройств с GitLab Repository Files API.
+
+GitLab хранит desired state, а плагин:
+
+- импортирует изменённые YAML-файлы из GitLab;
+- создаёт локальные `ConfigurationBackup` с source `gitlab`;
+- связывает устройство NetBox с файлом через `GitLabConfigMapping`;
+- может создать due-now `ScheduledTask` для применения конфигурации, если включён `auto_apply`;
+- обновляет файл в GitLab при изменении конфигурации через интерфейс или API плагина;
+- пишет результат каждой операции в `GitLabSyncLog`.
+
+`NetworkTask` не синхронизируется с GitLab. Интеграция относится только к конфигурациям устройств.
+
+### GitLab Project Access Token
+
+Создайте Project Access Token в GitLab.
+
+Рекомендуемый scope:
+
+```text
+api
+```
+
+На некоторых инсталляциях GitLab можно использовать более узкие права, если они позволяют читать и изменять Repository Files API.
+
+Токен вводится в форме `GitLabIntegration` и хранится зашифрованным. Не указывайте token в логах, README, примерах payload или commit message.
+
+### Пример GitLabIntegration
+
+```text
+name: Production GitLab
+gitlab_url: https://gitlab.example.com
+project_id: network/configs
+branch: main
+root_path: configs
+file_path_pattern: {root_path}/{site_slug}/{location_slug}/{rack_slug}/{device_name}.yaml
+enabled: true
+auto_apply: false
+```
+
+`project_id` может быть числовым ID проекта или путём вида `group/project`, если GitLab API принимает такой идентификатор.
+
+### Структура Репозитория GitLab
+
+Файлы конфигураций строятся по данным размещения из основного NetBox:
+
+```text
+configs/
+  <site_slug>/
+    <location_slug>/
+      <rack_name_or_slug>/
+        <device_name>.yaml
+```
+
+Пример:
+
+```text
+configs/
+  main-campus/
+    building-a-floor-2/
+      rack-12/
+        sw-core-01.yaml
+```
+
+Если у устройства нет location или rack:
+
+```text
+configs/
+  <site_slug>/
+    no-location/
+      no-rack/
+        <device_name>.yaml
+```
+
+Если нет site:
+
+```text
+configs/
+  no-site/
+    no-location/
+      no-rack/
+        <device_name>.yaml
+```
+
+### Построение Пути К Файлу
+
+Путь строит `GitLabPathBuilder`.
+
+Он берёт:
+
+- `device.site.slug` или `device.site.name`;
+- `device.location.slug` или `device.location.name`;
+- `device.rack.name` или `device.rack.slug`;
+- `device.name`;
+- дополнительные доступные атрибуты: role, platform, manufacturer, device ID.
+
+Поддерживаемые placeholders:
+
+```text
+{root_path}
+{site}
+{site_slug}
+{location}
+{location_slug}
+{rack}
+{rack_slug}
+{device}
+{device_name}
+{device_id}
+{role}
+{role_slug}
+{platform}
+{manufacturer}
+```
+
+Значение по умолчанию:
+
+```text
+{root_path}/{site_slug}/{location_slug}/{rack_slug}/{device_name}.yaml
+```
+
+Все части пути нормализуются:
+
+- пробелы и недопустимые символы заменяются безопасным разделителем;
+- `..`, `/`, `\` и path traversal не допускаются;
+- пустые значения заменяются fallback-сегментами.
+
+Fallback-сегменты:
+
+```text
+no-site
+no-location
+no-rack
+no-role
+no-platform
+no-manufacturer
+```
+
+### GitLab Webhook
+
+Webhook URL:
+
+```text
+https://netbox.example.com/api/plugins/config-weaver/gitlab/webhook/
+```
+
+Настройки в GitLab:
+
+- Trigger: `Push events`.
+- Secret token: значение `webhook_secret` из `GitLabIntegration`.
+- Branch: ветка, указанная в `GitLabIntegration.branch`, например `main`.
+
+Endpoint проверяет `X-Gitlab-Token`, игнорирует события из другой ветки и обрабатывает только `.yaml`/`.yml` файлы внутри `root_path`.
+
+Пример поддерживаемого push payload:
+
+```json
+{
+  "ref": "refs/heads/main",
+  "checkout_sha": "abc123",
+  "project": {
+    "id": 42,
+    "path_with_namespace": "network/configs"
+  },
+  "commits": [
+    {
+      "added": [],
+      "modified": [
+        "configs/main-campus/building-a-floor-2/rack-12/sw-core-01.yaml"
+      ],
+      "removed": []
+    }
+  ]
+}
+```
+
+После webhook плагин:
+
+1. Находит подходящую `GitLabIntegration`.
+2. Проверяет branch и secret.
+3. Находит изменённые YAML-файлы.
+4. Сопоставляет файл с устройством NetBox через `GitLabConfigMapping` или через вычисленный путь.
+5. Загружает raw YAML из GitLab по `checkout_sha`.
+6. Валидирует YAML существующей логикой.
+7. Создаёт `ConfigurationBackup` с source `gitlab`.
+8. Обновляет mapping и commit SHA.
+9. Пишет `GitLabSyncLog`.
+10. Если `auto_apply=true`, создаёт due-now `ScheduledTask`.
+
+SSH-команды не выполняются внутри HTTP webhook-запроса.
+
+### Auto Apply
+
+Если `auto_apply=false`, GitLab webhook только импортирует desired configuration в плагин.
+
+Если `auto_apply=true`, webhook создаёт `ScheduledTask` со статусом `pending` и текущим временем запуска. Применение выполняет существующий планировщик.
+
+Перед отправкой команд на устройство executor создаёт pre-apply backup текущей running configuration. После успешного применения создаётся новая backup-версия результата.
+
+### Синхронизация Из Плагина В GitLab
+
+При изменении `ConfigurationBackup` через UI или API плагин:
+
+1. Определяет устройство из `ConfigurationBackup.device`.
+2. Находит существующий `GitLabConfigMapping` или создаёт новый.
+3. Строит путь по данным NetBox.
+4. Получает metadata файла из GitLab.
+5. Создаёт файл, если его ещё нет.
+6. Обновляет файл, если он существует и нет конфликта commit SHA.
+7. Обновляет `last_gitlab_commit_sha`.
+8. Пишет `GitLabSyncLog`.
+
+Commit message:
+
+```text
+Update config for <device_name> from NetBox Config Weaver
+```
+
+Изменения, пришедшие из GitLab webhook, не отправляются обратно в GitLab, чтобы избежать рекурсивной синхронизации GitLab -> plugin -> GitLab.
+
+### Защита От Конфликтов
+
+`GitLabConfigMapping.last_gitlab_commit_sha` хранит последний известный commit SHA файла.
+
+Перед обновлением файла из плагина сервис получает metadata файла GitLab и сравнивает `last_commit_id` с сохранённым `last_gitlab_commit_sha`.
+
+Если файл изменился в GitLab после последней синхронизации:
+
+- файл не перезаписывается;
+- создаётся `GitLabSyncLog` со статусом `conflict`;
+- пользователю или API возвращается понятное сообщение об ошибке/конфликте.
+
+Для webhook-событий GitLab считается источником истины.
+
+## Безопасность
+
+- `access_token` и `webhook_secret` хранятся зашифрованными.
+- Секреты не должны попадать в логи.
+- `PLUGINS_CONFIG["main"]["secret_key"]` должен быть длинным, случайным и стабильным.
+- Для GitLab предпочтительнее Project Access Token вместо персонального token.
+- Не включайте опасные команды в YAML. Команды проходят через `ConfigurationValidator`, который блокирует известные опасные операции.
+- Не применяйте конфигурации без актуальных backup-версий.
+
+## Команды Для Миграций И Тестов
+
+Применить миграции:
 
 ```bash
-# Получить все сетевые задачи
-curl -H "Authorization: Token YOUR_API_TOKEN" \
-  http://netbox/api/plugins/main/tasks/
+cd netbox/netbox
+../venv/bin/python manage.py migrate
+```
 
-# Создать новую задачу (через UI удобнее)
-curl -X POST -H "Content-Type: application/json" \
-  -H "Authorization: Token YOUR_API_TOKEN" \
-  -d '{
-    "name": "core-switch-setup",
-    "description": "Initial core switch config",
-    "device_task": "core_config",
-    "plan_yaml": "...",
-    "enabled": true
-  }' \
-  http://netbox/api/plugins/main/tasks/
+Проверить проект:
 
-# Получить версии для устройства
-curl -H "Authorization: Token YOUR_API_TOKEN" \
-  http://netbox/api/plugins/main/configurations/by_device/?device_id=1
+```bash
+cd netbox/netbox
+../venv/bin/python manage.py check
+```
 
-# Сравнить две версии
-curl -H "Authorization: Token YOUR_API_TOKEN" \
-  http://netbox/api/plugins/main/configurations/compare/?from=1&to=2
+Запустить тесты плагина:
+
+```bash
+cd netbox/netbox
+../venv/bin/python manage.py test main
+```
+
+Запустить только тесты GitLab-интеграции:
+
+```bash
+cd netbox/netbox
+../venv/bin/python manage.py test main.tests.test_gitlab_integration
 ```

@@ -1,6 +1,6 @@
 {% extends 'base/layout.html' %}
 
-{% block title %}Task Command Preview{% endblock %}
+{% block title %}Task command preview{% endblock %}
 
 {% block content %}
 <div class="card">
@@ -21,7 +21,7 @@
       <pre class="mb-0"><code>{% for cmd in commands %}{{ cmd }}
 {% endfor %}</code></pre>
     {% else %}
-      <div class="text-muted">No commands generated.</div>
+      <div class="text-muted">Commands were not generated.</div>
     {% endif %}
   </div>
 </div>

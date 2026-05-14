@@ -1,0 +1,36 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}Command template preview{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Preview: {{ template.name }}</span>
+    <a class="btn btn-sm btn-secondary" href="{{ template.get_absolute_url }}">Back</a>
+  </div>
+  <div class="card-body">
+    <dl class="row">
+      <dt class="col-sm-3">Vendor</dt>
+      <dd class="col-sm-9">{{ template.vendor }}</dd>
+      <dt class="col-sm-3">Platform</dt>
+      <dd class="col-sm-9">{{ template.platform }}</dd>
+      <dt class="col-sm-3">Operation</dt>
+      <dd class="col-sm-9">{{ template.operation_type }}</dd>
+    </dl>
+
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit" class="btn btn-primary">
+        <i class="mdi mdi-eye-outline"></i> Show commands
+      </button>
+    </form>
+
+    {% if commands %}
+      <hr>
+      <pre class="mb-0"><code>{% for command in commands %}{{ command }}
+{% endfor %}</code></pre>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
