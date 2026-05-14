@@ -119,3 +119,41 @@ class BulkActionViewTests(TestCase):
 
         self.assertRedirects(response, reverse("plugins:main:commandtemplate_list"))
         self.assertFalse(CommandTemplate.objects.filter(pk=self.template.pk).exists())
+
+    def test_command_template_list_has_compact_columns(self):
+        response = self.client.get(reverse("plugins:main:commandtemplate_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, ">Name</a>", html=False)
+        self.assertContains(response, ">Vendor</a>", html=False)
+        self.assertContains(response, ">Operation type</a>", html=False)
+        self.assertContains(response, ">Last updated</a>", html=False)
+        self.assertNotContains(response, ">Platform</a>", html=False)
+        self.assertNotContains(response, ">Revision</a>", html=False)
+        self.assertNotContains(response, ">Created</a>", html=False)
+        self.assertContains(response, self.template.get_absolute_url())
+
+    def test_command_template_detail_renders_profile_sections(self):
+        self.template.bound_entity_type = CommandTemplate.ENTITY_INTERFACE
+        self.template.bound_parameter = "description"
+        self.template.bound_direction = CommandTemplate.DIRECTION_BOTH
+        self.template.binding_priority = 50
+        self.template.revision = 3
+        self.template.command_body = "interface {interface}\ndescription {description}"
+        self.template.save()
+
+        response = self.client.get(self.template.get_absolute_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Command template profile")
+        self.assertContains(response, "Operation type")
+        self.assertContains(response, "Custom")
+        self.assertContains(response, "Bound entity")
+        self.assertContains(response, "Interface")
+        self.assertContains(response, "interface.description")
+        self.assertContains(response, "Binding priority")
+        self.assertContains(response, "50")
+        self.assertNotContains(response, "<dt class=\"col-sm-3\">Command body</dt>", html=True)
+        self.assertContains(response, '<pre class="mb-0 yaml-code-block cw-command-body"><code>', html=False)
+        self.assertContains(response, "interface {interface}")
+        self.assertContains(response, reverse("plugins:main:commandtemplate_preview", kwargs={"pk": self.template.pk}))

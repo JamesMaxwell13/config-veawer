@@ -145,3 +145,9 @@ code[data-yaml-highlight],
 .yaml-diff-meta {
   color: #808080;
 }
+
+.cw-command-body code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

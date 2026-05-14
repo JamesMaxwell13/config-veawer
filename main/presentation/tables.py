@@ -35,27 +35,17 @@ class DeviceCredentialTable(NetBoxTable):
 
 
 class CommandTemplateTable(NetBoxTable):
-    def render_bound_parameter(self, value, record):
-        if not value:
-            return "-"
-        if record.bound_entity_type:
-            return f"{record.bound_entity_type}.{value}"
-        return value
+    name = TemplateColumn(
+        template_code='<a href="{{ record.get_absolute_url }}">{{ record.name }}</a>',
+        verbose_name="Name",
+    )
 
     class Meta(NetBoxTable.Meta):
         model = CommandTemplate
         fields = (
             "name",
             "vendor",
-            "platform",
             "operation_type",
-            "bound_entity_type",
-            "bound_parameter",
-            "bound_direction",
-            "binding_priority",
-            "revision",
-            "is_active",
-            "created",
             "last_updated",
         )
 
