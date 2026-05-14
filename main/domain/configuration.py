@@ -183,6 +183,79 @@ class ConfigurationValidator:
         return None
 
     @classmethod
+    def _validate_ip_token(cls, value: str, normalized: str) -> list[str]:
+        if not cls._is_ipv4_token(value):
+            return []
+        if cls._is_valid_ipv4(value):
+            return []
+        return [f"Invalid IPv4 address '{value}' in command: {normalized}"]
+
+    @classmethod
+    def _validate_mask_token(
+        cls,
+        value: str,
+        normalized: str,
+        *,
+        allow_wildcard: bool,
+    ) -> list[str]:
+        if not cls._is_ipv4_token(value):
+            return []
+        mask_kind = cls._mask_kind(value)
+        if mask_kind is None:
+            return [f"Invalid IPv4 mask '{value}' in command: {normalized}"]
+        if not allow_wildcard and mask_kind != "netmask":
+            return [f"Invalid IPv4 mask '{value}' in command: {normalized}"]
+        return []
+
+    @classmethod
+    def _validate_ip_route_command(cls, tokens: list[str], normalized: str) -> list[str]:
+        # Expected core shape: ip route <network> <mask> <next-hop|interface> [options]
+        if len(tokens) < 5:
+            return []
+        destination = tokens[2]
+        mask = tokens[3]
+        next_hop_or_interface = tokens[4]
+        errors: list[str] = []
+        errors.extend(cls._validate_ip_token(destination, normalized))
+        errors.extend(cls._validate_mask_token(mask, normalized, allow_wildcard=False))
+        # Interface-only routes are valid; validate token as IPv4 only when it looks like IPv4.
+        if cls._is_ipv4_token(next_hop_or_interface):
+            errors.extend(cls._validate_ip_token(next_hop_or_interface, normalized))
+        return errors
+
+    @classmethod
+    def _validate_ip_address_command(cls, tokens: list[str], normalized: str) -> list[str]:
+        # Expected shapes:
+        # ip address <ip> <mask> [secondary]
+        # ip address dhcp
+        # ip address negotiated
+        if len(tokens) < 3:
+            return []
+        value = tokens[2].lower()
+        if value in {"dhcp", "negotiated"}:
+            return []
+        if len(tokens) < 4:
+            return []
+        ip_value = tokens[2]
+        mask_value = tokens[3]
+        errors: list[str] = []
+        errors.extend(cls._validate_ip_token(ip_value, normalized))
+        errors.extend(cls._validate_mask_token(mask_value, normalized, allow_wildcard=False))
+        return errors
+
+    @classmethod
+    def _validate_network_command(cls, tokens: list[str], normalized: str) -> list[str]:
+        # Keep legacy support for wildcard masks (e.g. OSPF/EIGRP network commands).
+        if len(tokens) < 3:
+            return []
+        ip_value = tokens[1]
+        mask_value = tokens[2]
+        errors: list[str] = []
+        errors.extend(cls._validate_ip_token(ip_value, normalized))
+        errors.extend(cls._validate_mask_token(mask_value, normalized, allow_wildcard=True))
+        return errors
+
+    @classmethod
     def _validate_ipv4_mask_pairs(cls, commands: list[str]) -> list[str]:
         errors: list[str] = []
         for command in commands:
@@ -190,20 +263,14 @@ class ConfigurationValidator:
             if not normalized:
                 continue
             tokens = [token.strip(",;") for token in normalized.split()]
-            for index in range(len(tokens) - 1):
-                first = tokens[index]
-                second = tokens[index + 1]
-                if not cls._is_ipv4_token(first) or not cls._is_ipv4_token(second):
-                    continue
-                if not cls._is_valid_ipv4(first):
-                    errors.append(
-                        f"Invalid IPv4 address '{first}' in command: {normalized}"
-                    )
-                    continue
-                if cls._mask_kind(second) is None:
-                    errors.append(
-                        f"Invalid IPv4 mask '{second}' in command: {normalized}"
-                    )
+            if len(tokens) >= 2 and tokens[0].lower() == "ip" and tokens[1].lower() == "route":
+                errors.extend(cls._validate_ip_route_command(tokens, normalized))
+                continue
+            if len(tokens) >= 2 and tokens[0].lower() == "ip" and tokens[1].lower() == "address":
+                errors.extend(cls._validate_ip_address_command(tokens, normalized))
+                continue
+            if tokens and tokens[0].lower() == "network":
+                errors.extend(cls._validate_network_command(tokens, normalized))
         return errors
 
     @classmethod

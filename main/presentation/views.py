@@ -194,10 +194,32 @@ class DevicePlatformProfileVersionsView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         versions = ConfigurationBackup.objects.filter(device=instance.device).order_by("-version")
+        mapping = (
+            GitLabConfigMapping.objects.filter(device=instance.device, sync_enabled=True)
+            .select_related("configuration_backup", "actual_backup")
+            .order_by("-last_updated")
+            .first()
+        )
+        latest_stored = versions.first()
+        desired_backup = mapping.configuration_backup if mapping else None
+        actual_backup = mapping.actual_backup if mapping else None
+        if actual_backup is None:
+            actual_backup = (
+                ConfigurationBackup.objects.filter(
+                    device=instance.device,
+                    source__in=GitLabIntegrationService.ACTUAL_SOURCES,
+                )
+                .order_by("-version")
+                .first()
+            )
         return {
             "device": instance.device,
             "versions": versions,
-            "current_version": versions.first(),
+            "latest_stored_version": latest_stored,
+            "current_version": latest_stored,
+            "desired_backup": desired_backup,
+            "actual_backup": actual_backup,
+            "mapping": mapping,
             "diff_url": reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": instance.pk}),
         }
 
@@ -239,6 +261,7 @@ class GitLabIntegrationView(generic.ObjectView):
                 "integration",
                 "device",
                 "configuration_backup",
+                "actual_backup",
             ),
             prefix="mapping-",
         )
@@ -303,17 +326,17 @@ class GitLabIntegrationActionView(ObjectPermissionRequiredMixin, View):
 
 
 class GitLabConfigMappingListView(generic.ObjectListView):
-    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup", "actual_backup")
     table = tables.GitLabConfigMappingTable
     filterset = filtersets.GitLabConfigMappingFilterSet
 
 
 class GitLabConfigMappingView(generic.ObjectView):
-    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup", "actual_backup")
 
 
 class GitLabConfigMappingEditView(generic.ObjectEditView):
-    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup")
+    queryset = GitLabConfigMapping.objects.select_related("integration", "device", "configuration_backup", "actual_backup")
     form = forms.GitLabConfigMappingForm
 
 
@@ -614,11 +637,20 @@ class DeviceConfigurationsView(generic.ObjectView):
         configurations = list(ConfigurationBackup.objects.filter(device=instance).order_by("-version"))
         current = configurations[0] if configurations else None
         profile = DevicePlatformProfile.objects.filter(device=instance, enabled=True).first()
+        mapping = (
+            GitLabConfigMapping.objects.filter(device=instance, sync_enabled=True)
+            .select_related("configuration_backup", "actual_backup")
+            .order_by("-last_updated")
+            .first()
+        )
         return {
             "profile": profile,
             "current_configuration": current,
             "previous_configurations": configurations[1:],
             "current_yaml": configuration_backup_to_yaml(current) if current else "",
+            "desired_backup": mapping.configuration_backup if mapping else None,
+            "actual_backup": mapping.actual_backup if mapping else None,
+            "apply_state": mapping.apply_state if mapping else "",
         }
 
 

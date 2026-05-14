@@ -72,7 +72,16 @@ class GitLabIntegrationFilterSet(NetBoxModelFilterSet):
 class GitLabConfigMappingFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = GitLabConfigMapping
-        fields = ("id", "integration", "device", "configuration_backup", "file_path", "sync_enabled")
+        fields = (
+            "id",
+            "integration",
+            "device",
+            "configuration_backup",
+            "actual_backup",
+            "apply_state",
+            "file_path",
+            "sync_enabled",
+        )
 
     def search(self, queryset, name, value):
         if not value.strip():

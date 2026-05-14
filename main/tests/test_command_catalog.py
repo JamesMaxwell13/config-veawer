@@ -168,3 +168,24 @@ class CommandGeneratorCatalogTests(SimpleTestCase):
         self.assertFalse(valid)
         self.assertTrue(any("Invalid IPv4 address" in item for item in errors))
         self.assertTrue(any("Invalid IPv4 mask" in item for item in errors))
+
+    def test_validator_accepts_default_routes_with_ipv4_next_hop(self):
+        valid, errors = ConfigurationValidator.validate_commands(
+            [
+                "ip route 0.0.0.0 0.0.0.0 192.168.1.1",
+                "ip route 0.0.0.0 0.0.0.0 172.22.16.24",
+            ]
+        )
+
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+    def test_validator_rejects_invalid_route_next_hop_ipv4(self):
+        valid, errors = ConfigurationValidator.validate_commands(
+            [
+                "ip route 10.0.0.0 255.255.255.0 999.1.1.1",
+            ]
+        )
+
+        self.assertFalse(valid)
+        self.assertTrue(any("Invalid IPv4 address" in item for item in errors))

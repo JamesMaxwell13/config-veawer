@@ -174,6 +174,36 @@ class TaskExecutor:
         )
 
     @classmethod
+    def apply_backup_to_device_with_running(cls, backup) -> tuple[str, str]:
+        profile = DeviceConnectionManager.get_profile(backup.device)
+        if not profile:
+            raise ConfigValidationError(f"No active device profile for {backup.device.name}")
+        commands = cls.commands_for_yaml(backup.device, profile, backup.config_text)
+        logger.info(
+            "Applying GitLab configuration backup with runtime verification %s command_count=%s backup_id=%s version=%s",
+            device_log_context(backup.device, profile),
+            len(commands),
+            backup.pk,
+            backup.version,
+        )
+        session, _profile, _check = connect_device_cli(backup.device, verify_saved_config=True)
+        try:
+            session.send_config_set(commands)
+            running_config = session.get_running_config()
+        finally:
+            session.disconnect()
+        logger.info(
+            "GitLab configuration backup sent and runtime captured %s backup_id=%s version=%s",
+            device_log_context(backup.device, profile),
+            backup.pk,
+            backup.version,
+        )
+        return (
+            running_config,
+            f"GitLab configuration v{backup.version} sent to device; runtime captured for verification",
+        )
+
+    @classmethod
     def _run_apply_scenario(cls, task: ScheduledTask) -> str:
         profile = DeviceConnectionManager.get_profile(task.target_device)
         if not profile:

@@ -182,6 +182,7 @@ class GitLabConfigMappingForm(NetBoxModelForm):
     integration = DynamicModelChoiceField(queryset=GitLabIntegration.objects.all())
     device = DynamicModelChoiceField(queryset=Device.objects.all())
     configuration_backup = DynamicModelChoiceField(queryset=ConfigurationBackup.objects.all(), required=False)
+    actual_backup = DynamicModelChoiceField(queryset=ConfigurationBackup.objects.all(), required=False)
     scheduled_task = DynamicModelChoiceField(queryset=ScheduledTask.objects.all(), required=False)
 
     class Meta:
@@ -190,8 +191,14 @@ class GitLabConfigMappingForm(NetBoxModelForm):
             "integration",
             "device",
             "configuration_backup",
+            "actual_backup",
             "scheduled_task",
             "file_path",
+            "apply_state",
+            "apply_attempts",
+            "last_apply_attempt_at",
+            "last_apply_verified_at",
+            "last_apply_error",
             "last_gitlab_commit_sha",
             "sync_enabled",
             "tags",

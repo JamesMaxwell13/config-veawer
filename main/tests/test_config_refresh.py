@@ -390,7 +390,7 @@ class ConfigurationRefreshTests(TestCase):
             response,
             reverse("plugins:main:deviceplatformprofile_versions_diff", kwargs={"pk": self.profile.pk}),
         )
-        self.assertContains(response, "Current")
+        self.assertContains(response, "Latest stored")
         self.assertContains(response, "Apply", count=1)
         self.assertContains(response, "btn-success")
         self.assertNotContains(response, "Apply to device")

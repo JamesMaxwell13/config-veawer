@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 from dcim.models import Device
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -18,7 +20,6 @@ from ..infrastructure.gitlab import (
     GitLabPathBuilder,
 )
 from ..infrastructure.network import connect_device_cli
-from ..infrastructure.repositories import ConfigurationRepository
 from ..infrastructure.vcs import ConfigurationVCS
 from ..logging import device_log_context, logger
 from ..models import (
@@ -47,6 +48,9 @@ class GitLabSyncResult:
 class GitLabIntegrationService:
     SOURCE_GITLAB = "gitlab"
     SOURCE_PLUGIN = "plugin"
+    DEFAULT_AUTO_APPLY_MAX_ATTEMPTS = 5
+    DEFAULT_AUTO_APPLY_RETRY_DELAY_SECONDS = 1.0
+    ACTUAL_SOURCES = {"runtime", "manual_refresh", "restore", "pre_apply"}
 
     @staticmethod
     def client_for(integration: GitLabIntegration) -> GitLabClient:
@@ -131,6 +135,222 @@ class GitLabIntegrationService:
             or metadata_commit
             or ""
         )
+
+    @classmethod
+    def _plugin_config(cls) -> dict[str, Any]:
+        return getattr(settings, "PLUGINS_CONFIG", {}).get("main", {})
+
+    @classmethod
+    def _auto_apply_max_attempts(cls) -> int:
+        raw = cls._plugin_config().get("gitlab_auto_apply_max_attempts", cls.DEFAULT_AUTO_APPLY_MAX_ATTEMPTS)
+        try:
+            return min(20, max(1, int(raw)))
+        except (TypeError, ValueError):
+            return cls.DEFAULT_AUTO_APPLY_MAX_ATTEMPTS
+
+    @classmethod
+    def _auto_apply_retry_delay_seconds(cls) -> float:
+        raw = cls._plugin_config().get(
+            "gitlab_auto_apply_retry_delay_seconds",
+            cls.DEFAULT_AUTO_APPLY_RETRY_DELAY_SECONDS,
+        )
+        try:
+            return max(0.0, float(raw))
+        except (TypeError, ValueError):
+            return cls.DEFAULT_AUTO_APPLY_RETRY_DELAY_SECONDS
+
+    @staticmethod
+    def _read_device_running_config(device: Device) -> str:
+        session, _profile, _check = connect_device_cli(device, verify_saved_config=False)
+        try:
+            return session.get_running_config()
+        finally:
+            session.disconnect()
+
+    @classmethod
+    def _latest_actual_backup(cls, device: Device) -> ConfigurationBackup | None:
+        return (
+            ConfigurationBackup.objects.filter(device=device, source__in=cls.ACTUAL_SOURCES)
+            .order_by("-version")
+            .first()
+        )
+
+    @classmethod
+    def _snapshot_runtime_if_changed(
+        cls,
+        device: Device,
+        running_config: str,
+        baseline: ConfigurationBackup | None = None,
+    ) -> tuple[ConfigurationBackup, bool]:
+        baseline_backup = baseline or cls._latest_actual_backup(device)
+        if baseline_backup and ConfigurationYamlService.backup_matches_running_config(
+            device,
+            baseline_backup.config_text,
+            running_config,
+            source="runtime",
+        ):
+            return baseline_backup, False
+        runtime_backup = ConfigurationVCS.write_backup(device=device, config_text=running_config, source="runtime")
+        return runtime_backup, True
+
+    @staticmethod
+    def _set_mapping_apply_state(
+        mapping: GitLabConfigMapping,
+        *,
+        state: str,
+        attempts: int | None = None,
+        actual_backup: ConfigurationBackup | None = None,
+        last_attempt_at=None,
+        last_verified_at=None,
+        error: str | None = None,
+    ) -> None:
+        update_fields: list[str] = []
+        if mapping.apply_state != state:
+            mapping.apply_state = state
+            update_fields.append("apply_state")
+        if attempts is not None and mapping.apply_attempts != attempts:
+            mapping.apply_attempts = attempts
+            update_fields.append("apply_attempts")
+        if actual_backup is not None and mapping.actual_backup_id != actual_backup.pk:
+            mapping.actual_backup = actual_backup
+            update_fields.append("actual_backup")
+        if last_attempt_at is not None:
+            mapping.last_apply_attempt_at = last_attempt_at
+            update_fields.append("last_apply_attempt_at")
+        if last_verified_at is not None:
+            mapping.last_apply_verified_at = last_verified_at
+            update_fields.append("last_apply_verified_at")
+        if error is not None and mapping.last_apply_error != error:
+            mapping.last_apply_error = error
+            update_fields.append("last_apply_error")
+        if update_fields:
+            mapping.save(update_fields=tuple(update_fields + ["last_updated"]))
+
+    @classmethod
+    def _auto_apply_gitlab_backup(
+        cls,
+        integration: GitLabIntegration,
+        mapping: GitLabConfigMapping,
+        backup: ConfigurationBackup,
+        file_path: str,
+        commit_sha: str,
+    ) -> GitLabSyncResult:
+        max_attempts = cls._auto_apply_max_attempts()
+        retry_delay = cls._auto_apply_retry_delay_seconds()
+        for attempt in range(1, max_attempts + 1):
+            attempt_at = timezone.now()
+            cls._set_mapping_apply_state(
+                mapping,
+                state=GitLabConfigMapping.APPLY_STATE_APPLYING,
+                attempts=attempt,
+                last_attempt_at=attempt_at,
+                error="",
+            )
+            try:
+                running_after_apply, _apply_message = TaskExecutor.apply_backup_to_device_with_running(backup)
+            except Exception as exc:
+                message = f"GitLab auto-apply attempt {attempt}/{max_attempts} failed: {exc}"
+                cls._set_mapping_apply_state(
+                    mapping,
+                    state=GitLabConfigMapping.APPLY_STATE_FAILED,
+                    attempts=attempt,
+                    last_attempt_at=attempt_at,
+                    error=str(exc),
+                )
+                cls.log(
+                    integration,
+                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                    GitLabSyncLog.STATUS_FAILED,
+                    message,
+                    mapping=mapping,
+                    device=backup.device,
+                    backup=backup,
+                    file_path=file_path,
+                    commit_sha=commit_sha,
+                )
+                if attempt >= max_attempts:
+                    return GitLabSyncResult("failed", message, file_path, commit_sha, backup, mapping)
+                if retry_delay > 0:
+                    time.sleep(retry_delay)
+                continue
+
+            if ConfigurationYamlService.backup_matches_running_config(
+                backup.device,
+                backup.config_text,
+                running_after_apply,
+                source="gitlab_apply",
+            ):
+                verified_at = timezone.now()
+                cls._set_mapping_apply_state(
+                    mapping,
+                    state=GitLabConfigMapping.APPLY_STATE_VERIFIED,
+                    attempts=attempt,
+                    actual_backup=backup,
+                    last_attempt_at=attempt_at,
+                    last_verified_at=verified_at,
+                    error="",
+                )
+                message = f"Configuration imported from GitLab and verified on device (attempt {attempt}/{max_attempts})."
+                cls.log(
+                    integration,
+                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                    GitLabSyncLog.STATUS_SUCCESS,
+                    message,
+                    mapping=mapping,
+                    device=backup.device,
+                    backup=backup,
+                    file_path=file_path,
+                    commit_sha=commit_sha,
+                )
+                return GitLabSyncResult("success", message, file_path, commit_sha, backup, mapping)
+
+            actual_backup, _created = cls._snapshot_runtime_if_changed(
+                backup.device,
+                running_after_apply,
+                baseline=mapping.actual_backup,
+            )
+            mismatch_message = (
+                f"GitLab auto-apply verification mismatch on attempt {attempt}/{max_attempts}: "
+                "device runtime does not match imported GitLab configuration."
+            )
+            cls._set_mapping_apply_state(
+                mapping,
+                state=GitLabConfigMapping.APPLY_STATE_DRIFT,
+                attempts=attempt,
+                actual_backup=actual_backup,
+                last_attempt_at=attempt_at,
+                error=mismatch_message,
+            )
+            if attempt >= max_attempts:
+                cls.log(
+                    integration,
+                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                    GitLabSyncLog.STATUS_FAILED,
+                    mismatch_message,
+                    mapping=mapping,
+                    device=backup.device,
+                    backup=backup,
+                    file_path=file_path,
+                    commit_sha=commit_sha,
+                )
+                return GitLabSyncResult("failed", mismatch_message, file_path, commit_sha, backup, mapping)
+
+            cls.log(
+                integration,
+                GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
+                GitLabSyncLog.STATUS_CONFLICT,
+                mismatch_message,
+                mapping=mapping,
+                device=backup.device,
+                backup=backup,
+                file_path=file_path,
+                commit_sha=commit_sha,
+            )
+            if retry_delay > 0:
+                time.sleep(retry_delay)
+
+        message = "GitLab auto-apply exhausted retries."
+        return GitLabSyncResult("failed", message, file_path, commit_sha, backup, mapping)
 
     @classmethod
     def push_backup_to_gitlab(
@@ -295,21 +515,15 @@ class GitLabIntegrationService:
             )
             return GitLabSyncResult("failed", str(exc), file_path, commit_sha, mapping=mapping)
 
+        runtime_snapshot: ConfigurationBackup | None = mapping.actual_backup
         if integration.auto_apply:
             try:
-                session, _profile, _check = connect_device_cli(device, verify_saved_config=False)
-                try:
-                    running_config = session.get_running_config()
-                finally:
-                    session.disconnect()
-                latest_backup = ConfigurationRepository.latest_backup_for_device(device.pk)
-                if not latest_backup or not ConfigurationYamlService.backup_matches_running_config(
+                running_config = cls._read_device_running_config(device)
+                runtime_snapshot, _created = cls._snapshot_runtime_if_changed(
                     device,
-                    latest_backup.config_text,
                     running_config,
-                    source="runtime",
-                ):
-                    ConfigurationVCS.write_backup(device=device, config_text=running_config, source="runtime")
+                    baseline=runtime_snapshot,
+                )
             except Exception as exc:
                 message = f"GitLab auto-apply preflight failed: {exc}"
                 cls.log(
@@ -321,6 +535,11 @@ class GitLabIntegrationService:
                     device=device,
                     file_path=file_path,
                     commit_sha=commit_sha,
+                )
+                cls._set_mapping_apply_state(
+                    mapping,
+                    state=GitLabConfigMapping.APPLY_STATE_FAILED,
+                    error=message,
                 )
                 return GitLabSyncResult("failed", message, file_path, commit_sha, mapping=mapping)
 
@@ -339,12 +558,21 @@ class GitLabIntegrationService:
             mapping.file_path = file_path
             mapping.last_gitlab_commit_sha = commit_sha or mapping.last_gitlab_commit_sha
             mapping.last_gitlab_update_at = timezone.now()
+            mapping.apply_state = GitLabConfigMapping.APPLY_STATE_PENDING
+            mapping.apply_attempts = 0
+            mapping.last_apply_error = ""
+            if runtime_snapshot is not None:
+                mapping.actual_backup = runtime_snapshot
             mapping.save(
                 update_fields=(
                     "configuration_backup",
                     "file_path",
                     "last_gitlab_commit_sha",
                     "last_gitlab_update_at",
+                    "apply_state",
+                    "apply_attempts",
+                    "last_apply_error",
+                    "actual_backup",
                     "last_updated",
                 )
             )
@@ -355,26 +583,16 @@ class GitLabIntegrationService:
 
         InterfaceSyncService.sync_from_configuration_backup(backup, origin="gitlab_import")
 
-        message = "Configuration imported from GitLab."
         if integration.auto_apply:
-            try:
-                apply_message = TaskExecutor.apply_backup_to_device(backup)
-                message += f" Applied to device. {apply_message}"
-            except Exception as exc:
-                message = f"GitLab auto-apply failed: {exc}"
-                cls.log(
-                    integration,
-                    GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,
-                    GitLabSyncLog.STATUS_FAILED,
-                    message,
-                    mapping=mapping,
-                    device=device,
-                    backup=backup,
-                    file_path=file_path,
-                    commit_sha=commit_sha,
-                )
-                return GitLabSyncResult("failed", message, file_path, commit_sha, backup, mapping)
+            return cls._auto_apply_gitlab_backup(
+                integration=integration,
+                mapping=mapping,
+                backup=backup,
+                file_path=file_path,
+                commit_sha=commit_sha,
+            )
 
+        message = "Configuration imported from GitLab."
         cls.log(
             integration,
             GitLabSyncLog.DIRECTION_GITLAB_TO_PLUGIN,

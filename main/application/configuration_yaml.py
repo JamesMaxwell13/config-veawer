@@ -363,6 +363,7 @@ class ConfigurationYamlService:
             "last_updated",
             "last_checked_at",
             "timestamp",
+            "device",
         }
         if isinstance(value, dict):
             return {

@@ -225,6 +225,19 @@ class ConfigurationBackup(NetBoxModel):
 
 
 class GitLabConfigMapping(NetBoxModel):
+    class ApplyState(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPLYING = "applying", "Applying"
+        VERIFIED = "verified", "Verified"
+        DRIFT = "drift", "Drift"
+        FAILED = "failed", "Failed"
+
+    APPLY_STATE_PENDING = ApplyState.PENDING.value
+    APPLY_STATE_APPLYING = ApplyState.APPLYING.value
+    APPLY_STATE_VERIFIED = ApplyState.VERIFIED.value
+    APPLY_STATE_DRIFT = ApplyState.DRIFT.value
+    APPLY_STATE_FAILED = ApplyState.FAILED.value
+
     integration = models.ForeignKey(
         GitLabIntegration,
         on_delete=models.CASCADE,
@@ -245,7 +258,23 @@ class GitLabConfigMapping(NetBoxModel):
         blank=True,
         related_name="gitlab_mappings",
     )
+    actual_backup = models.ForeignKey(
+        ConfigurationBackup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="gitlab_actual_mappings",
+    )
     file_path = models.CharField(max_length=1024)
+    apply_state = models.CharField(
+        max_length=16,
+        choices=ApplyState.choices,
+        default=ApplyState.PENDING.value,
+    )
+    apply_attempts = models.PositiveIntegerField(default=0)
+    last_apply_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_apply_verified_at = models.DateTimeField(null=True, blank=True)
+    last_apply_error = models.TextField(blank=True)
     last_gitlab_commit_sha = models.CharField(max_length=64, blank=True)
     last_plugin_update_at = models.DateTimeField(null=True, blank=True)
     last_gitlab_update_at = models.DateTimeField(null=True, blank=True)

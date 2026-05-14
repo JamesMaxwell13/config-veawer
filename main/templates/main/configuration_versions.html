@@ -17,6 +17,27 @@
     </div>
   </div>
   <div class="card-body">
+    {% if desired_backup or actual_backup %}
+      <div class="alert alert-secondary py-2">
+        <div><strong>Desired (GitLab):</strong>
+          {% if desired_backup %}
+            <a href="{{ desired_backup.get_absolute_url }}">v{{ desired_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        <div><strong>Actual (Device runtime):</strong>
+          {% if actual_backup %}
+            <a href="{{ actual_backup.get_absolute_url }}">v{{ actual_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        {% if mapping %}
+          <div><strong>Apply state:</strong> {{ mapping.get_apply_state_display }} (attempts: {{ mapping.apply_attempts }})</div>
+        {% endif %}
+      </div>
+    {% endif %}
     <form id="configuration-compare-form" method="get" action="{{ diff_url }}" class="mb-3">
       <input type="hidden" name="from" id="configuration-compare-from">
       <input type="hidden" name="to" id="configuration-compare-to">
@@ -35,8 +56,14 @@
           </td>
           <td>
             v{{ v.version }}
-            {% if current_version and v.pk == current_version.pk %}
-              <span class="badge text-bg-success ms-1">Current</span>
+            {% if latest_stored_version and v.pk == latest_stored_version.pk %}
+              <span class="badge text-bg-success ms-1">Latest stored</span>
+            {% endif %}
+            {% if desired_backup and v.pk == desired_backup.pk %}
+              <span class="badge text-bg-primary ms-1">Desired</span>
+            {% endif %}
+            {% if actual_backup and v.pk == actual_backup.pk %}
+              <span class="badge text-bg-warning ms-1">Actual</span>
             {% endif %}
           </td>
           <td>

@@ -237,6 +237,8 @@ class GitLabIntegrationTests(TestCase):
         gitlab.get_raw_file.return_value = gitlab_yaml
         preflight_session = MagicMock()
         preflight_session.get_running_config.return_value = "hostname before-gitlab"
+        verify_session = MagicMock()
+        verify_session.get_running_config.return_value = "hostname gitlab-target"
         apply_session = MagicMock()
         apply_session.get_running_config.return_value = "hostname gitlab-target"
         payload = {
@@ -249,7 +251,13 @@ class GitLabIntegrationTests(TestCase):
         with TemporaryDirectory() as tmpdir:
             with (
                 patch.object(GitLabIntegrationService, "client_for", return_value=gitlab),
-                patch("main.application.gitlab.connect_device_cli", return_value=(preflight_session, None, {"checked": False})),
+                patch(
+                    "main.application.gitlab.connect_device_cli",
+                    side_effect=[
+                        (preflight_session, None, {"checked": False}),
+                        (verify_session, None, {"checked": False}),
+                    ],
+                ),
                 patch("main.application.tasks.connect_device_cli", return_value=(apply_session, None, {"checked": False})),
                 patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
                 patch("main.infrastructure.vcs.subprocess.run"),
@@ -268,10 +276,14 @@ class GitLabIntegrationTests(TestCase):
         self.assertEqual(backup.config_text, gitlab_yaml)
         self.assertEqual(backup.version, 2)
         self.assertEqual(backup.commit_hash, "abc123")
-        runtime_backup = ConfigurationBackup.objects.get(device=self.device, source="runtime")
-        self.assertEqual(runtime_backup.version, 1)
+        runtime_backups = list(ConfigurationBackup.objects.filter(device=self.device, source="runtime").order_by("version"))
+        self.assertTrue(runtime_backups)
+        self.assertEqual(runtime_backups[0].version, 1)
         mapping = GitLabConfigMapping.objects.get(integration=self.integration, device=self.device)
         self.assertEqual(mapping.configuration_backup, backup)
+        self.assertEqual(mapping.actual_backup, backup)
+        self.assertEqual(mapping.apply_state, GitLabConfigMapping.APPLY_STATE_VERIFIED)
+        self.assertEqual(mapping.apply_attempts, 1)
         self.assertIsNone(mapping.scheduled_task)
         self.assertEqual(mapping.last_gitlab_commit_sha, "abc123")
         self.assertEqual(ScheduledTask.objects.filter(target_device=self.device).count(), 0)
@@ -370,7 +382,7 @@ class GitLabIntegrationTests(TestCase):
         session.get_running_config.assert_not_called()
         self.assertFalse(ConfigurationBackup.objects.filter(device=self.device, source="runtime").exists())
 
-    def test_webhook_direct_apply_keeps_gitlab_current_when_device_result_differs(self):
+    def test_webhook_direct_apply_retries_and_marks_drift_when_device_result_differs(self):
         self.integration.auto_apply = True
         self.integration.save()
         credential = DeviceCredential.objects.create(
@@ -397,6 +409,7 @@ class GitLabIntegrationTests(TestCase):
         preflight_session = MagicMock()
         preflight_session.get_running_config.return_value = "hostname before-gitlab"
         apply_session = MagicMock()
+        apply_session.get_running_config.return_value = "hostname before-gitlab"
         payload = {
             "project": {"path_with_namespace": "network/configs"},
             "ref": "refs/heads/main",
@@ -407,8 +420,18 @@ class GitLabIntegrationTests(TestCase):
         with TemporaryDirectory() as tmpdir:
             with (
                 patch.object(GitLabIntegrationService, "client_for", return_value=gitlab),
-                patch("main.application.gitlab.connect_device_cli", return_value=(preflight_session, None, {"checked": False})),
+                patch(
+                    "main.application.gitlab.connect_device_cli",
+                    side_effect=[
+                        (preflight_session, None, {"checked": False}),
+                        (preflight_session, None, {"checked": False}),
+                        (preflight_session, None, {"checked": False}),
+                        (preflight_session, None, {"checked": False}),
+                    ],
+                ),
                 patch("main.application.tasks.connect_device_cli", return_value=(apply_session, None, {"checked": False})),
+                patch.object(GitLabIntegrationService, "_auto_apply_max_attempts", return_value=3),
+                patch.object(GitLabIntegrationService, "_auto_apply_retry_delay_seconds", return_value=0),
                 patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
                 patch("main.infrastructure.vcs.subprocess.run"),
                 patch("main.infrastructure.vcs.subprocess.check_output", return_value=b"vcs123\n"),
@@ -426,8 +449,14 @@ class GitLabIntegrationTests(TestCase):
         self.assertEqual([backup.source for backup in backups], ["runtime", "gitlab"])
         self.assertEqual(backups[1].commit_hash, "abc123")
         self.assertEqual(ScheduledTask.objects.filter(target_device=self.device).count(), 0)
-        apply_session.get_running_config.assert_not_called()
-        self.assertTrue(GitLabSyncLog.objects.filter(status=GitLabSyncLog.STATUS_SUCCESS).exists())
+        self.assertEqual(apply_session.send_config_set.call_count, 3)
+        mapping = GitLabConfigMapping.objects.get(integration=self.integration, device=self.device)
+        self.assertEqual(mapping.apply_state, GitLabConfigMapping.APPLY_STATE_DRIFT)
+        self.assertEqual(mapping.apply_attempts, 3)
+        self.assertEqual(mapping.configuration_backup.source, "gitlab")
+        self.assertEqual(mapping.actual_backup.source, "runtime")
+        self.assertTrue(GitLabSyncLog.objects.filter(status=GitLabSyncLog.STATUS_CONFLICT).exists())
+        self.assertTrue(GitLabSyncLog.objects.filter(status=GitLabSyncLog.STATUS_FAILED).exists())
 
     def test_webhook_direct_apply_uses_gitlab_backup_not_previous_runtime(self):
         self.integration.auto_apply = True
@@ -468,6 +497,8 @@ class GitLabIntegrationTests(TestCase):
         gitlab.get_raw_file.return_value = gitlab_yaml
         preflight_session = MagicMock()
         preflight_session.get_running_config.return_value = "hostname old-target"
+        verify_session = MagicMock()
+        verify_session.get_running_config.return_value = "hostname new-target"
         apply_session = MagicMock()
         apply_session.get_running_config.return_value = "hostname new-target"
         payload = {
@@ -480,7 +511,13 @@ class GitLabIntegrationTests(TestCase):
         with TemporaryDirectory() as tmpdir:
             with (
                 patch.object(GitLabIntegrationService, "client_for", return_value=gitlab),
-                patch("main.application.gitlab.connect_device_cli", return_value=(preflight_session, None, {"checked": False})),
+                patch(
+                    "main.application.gitlab.connect_device_cli",
+                    side_effect=[
+                        (preflight_session, None, {"checked": False}),
+                        (verify_session, None, {"checked": False}),
+                    ],
+                ),
                 patch("main.application.tasks.connect_device_cli", return_value=(apply_session, None, {"checked": False})),
                 patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
                 patch("main.infrastructure.vcs.subprocess.run"),
@@ -500,6 +537,9 @@ class GitLabIntegrationTests(TestCase):
         self.assertNotIn("hostname old-target", sent_commands)
         backup = ConfigurationBackup.objects.get(device=self.device, source="gitlab")
         self.assertEqual(backup.config_text, gitlab_yaml)
+        mapping = GitLabConfigMapping.objects.get(integration=self.integration, device=self.device)
+        self.assertEqual(mapping.actual_backup, backup)
+        self.assertEqual(mapping.apply_state, GitLabConfigMapping.APPLY_STATE_VERIFIED)
 
     def test_webhook_direct_apply_failure_keeps_gitlab_backup_without_scheduled_task(self):
         self.integration.auto_apply = True
@@ -539,6 +579,8 @@ class GitLabIntegrationTests(TestCase):
                 patch.object(GitLabIntegrationService, "client_for", return_value=gitlab),
                 patch("main.application.gitlab.connect_device_cli", return_value=(preflight_session, None, {"checked": False})),
                 patch("main.application.tasks.connect_device_cli", side_effect=RuntimeError("apply failed")),
+                patch.object(GitLabIntegrationService, "_auto_apply_max_attempts", return_value=2),
+                patch.object(GitLabIntegrationService, "_auto_apply_retry_delay_seconds", return_value=0),
                 patch.object(ConfigurationVCS, "repo_path", return_value=Path(tmpdir)),
                 patch("main.infrastructure.vcs.subprocess.run"),
                 patch("main.infrastructure.vcs.subprocess.check_output", return_value=b"vcs123\n"),
@@ -554,8 +596,12 @@ class GitLabIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 200, response.content.decode())
         self.assertTrue(ConfigurationBackup.objects.filter(device=self.device, source="gitlab").exists())
         self.assertEqual(ScheduledTask.objects.filter(target_device=self.device).count(), 0)
-        failed_log = GitLabSyncLog.objects.get(status=GitLabSyncLog.STATUS_FAILED)
-        self.assertIn("GitLab auto-apply failed", failed_log.message)
+        failed_log = GitLabSyncLog.objects.filter(status=GitLabSyncLog.STATUS_FAILED).order_by("-created").first()
+        self.assertIsNotNone(failed_log)
+        self.assertIn("GitLab auto-apply attempt", failed_log.message)
+        mapping = GitLabConfigMapping.objects.get(integration=self.integration, device=self.device)
+        self.assertEqual(mapping.apply_state, GitLabConfigMapping.APPLY_STATE_FAILED)
+        self.assertEqual(mapping.apply_attempts, 2)
 
     def test_webhook_ignores_other_branch(self):
         payload = {

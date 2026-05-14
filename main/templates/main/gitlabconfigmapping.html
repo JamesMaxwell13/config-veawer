@@ -22,10 +22,19 @@
         <dt class="col-sm-3">Device</dt>
         <dd class="col-sm-9"><a href="{{ object.device.get_absolute_url }}">{{ object.device }}</a></dd>
 
-        <dt class="col-sm-3">Configuration backup</dt>
+        <dt class="col-sm-3">Desired backup (GitLab)</dt>
         <dd class="col-sm-9">
           {% if object.configuration_backup %}
             <a href="{{ object.configuration_backup.get_absolute_url }}">{{ object.configuration_backup }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
+
+        <dt class="col-sm-3">Actual backup (device)</dt>
+        <dd class="col-sm-9">
+          {% if object.actual_backup %}
+            <a href="{{ object.actual_backup.get_absolute_url }}">{{ object.actual_backup }}</a>
           {% else %}
             -
           {% endif %}
@@ -45,6 +54,27 @@
 
         <dt class="col-sm-3">Sync enabled</dt>
         <dd class="col-sm-9">{{ object.sync_enabled|yesno:"Yes,No" }}</dd>
+
+        <dt class="col-sm-3">Apply state</dt>
+        <dd class="col-sm-9">{{ object.get_apply_state_display|default:"-" }}</dd>
+
+        <dt class="col-sm-3">Apply attempts</dt>
+        <dd class="col-sm-9">{{ object.apply_attempts }}</dd>
+
+        <dt class="col-sm-3">Last apply attempt</dt>
+        <dd class="col-sm-9">{{ object.last_apply_attempt_at|default:"-" }}</dd>
+
+        <dt class="col-sm-3">Last verification</dt>
+        <dd class="col-sm-9">{{ object.last_apply_verified_at|default:"-" }}</dd>
+
+        <dt class="col-sm-3">Last apply error</dt>
+        <dd class="col-sm-9">
+          {% if object.last_apply_error %}
+            <pre class="mb-0"><code>{{ object.last_apply_error }}</code></pre>
+          {% else %}
+            -
+          {% endif %}
+        </dd>
 
         <dt class="col-sm-3">Last GitLab commit</dt>
         <dd class="col-sm-9">

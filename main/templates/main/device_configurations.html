@@ -17,8 +17,29 @@
     <div class="col col-12">
       <div class="card">
         <h5 class="card-header">Current configuration</h5>
-        <div class="card-body">
-          {% if current_configuration %}
+  <div class="card-body">
+    {% if desired_backup or actual_backup %}
+      <div class="alert alert-secondary py-2">
+        <div><strong>Desired (GitLab):</strong>
+          {% if desired_backup %}
+            <a href="{{ desired_backup.get_absolute_url }}">v{{ desired_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        <div><strong>Actual (Device runtime):</strong>
+          {% if actual_backup %}
+            <a href="{{ actual_backup.get_absolute_url }}">v{{ actual_backup.version }}</a>
+          {% else %}
+            -
+          {% endif %}
+        </div>
+        {% if apply_state %}
+          <div><strong>Apply state:</strong> {{ apply_state }}</div>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if current_configuration %}
             <div class="mb-2 text-secondary">
               v{{ current_configuration.version }}
               {% if current_configuration.version_name %} · {{ current_configuration.version_name }}{% endif %}
