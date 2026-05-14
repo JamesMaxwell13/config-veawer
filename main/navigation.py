@@ -5,55 +5,55 @@ from netbox.plugins.navigation import PluginMenu, PluginMenuButton, PluginMenuIt
 menu_items = (
     PluginMenuItem(
         link="plugins:main:deviceplatformprofile_list",
-        link_text="Устройства",
+        link_text="Devices",
         buttons=(
             PluginMenuButton(
                 link="plugins:main:deviceplatformprofile_add",
-                title="Добавить устройство",
+                title="Add device profile",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
         link="plugins:main:configurationbackup_list",
-        link_text="Конфигурации",
+        link_text="Configurations",
         buttons=(
             PluginMenuButton(
                 link="plugins:main:configurationbackup_add",
-                title="Создать конфигурацию",
+                title="Create configuration",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
         link="plugins:main:scheduledtask_list",
-        link_text="Планировщик задач",
+        link_text="Task scheduler",
         buttons=(
             PluginMenuButton(
                 link="plugins:main:scheduledtask_add",
-                title="Новая задача",
+                title="Add task",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
         link="plugins:main:commandtemplate_list",
-        link_text="Шаблоны команд",
+        link_text="Command templates",
         buttons=(
             PluginMenuButton(
                 link="plugins:main:commandtemplate_add",
-                title="Добавить шаблон команд",
+                title="Add command template",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
     ),
     PluginMenuItem(
         link="plugins:main:devicecredential_list",
-        link_text="Учетные данные",
+        link_text="Credentials",
         buttons=(
             PluginMenuButton(
                 link="plugins:main:devicecredential_add",
-                title="Добавить учетные данные",
+                title="Add credential",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
@@ -64,7 +64,7 @@ menu_items = (
         buttons=(
             PluginMenuButton(
                 link="plugins:main:gitlabintegration_add",
-                title="Добавить GitLab integration",
+                title="Add GitLab integration",
                 icon_class="mdi mdi-plus-thick",
             ),
         ),
@@ -74,5 +74,5 @@ menu_items = (
 menu = PluginMenu(
     label=_("Config Weaver"),
     icon_class="mdi mdi-router-network",
-    groups=(("Управление устройствами", menu_items),),
+    groups=(("Device Management", menu_items),),
 )

@@ -28,19 +28,19 @@
   {{ block.super }}
   {% if profile %}
     <a class="btn btn-purple ms-1" href="{% url 'plugins:main:deviceplatformprofile_versions' pk=profile.pk %}">
-      <i class="mdi mdi-format-list-bulleted"></i> Версии устройства
+      <i class="mdi mdi-format-list-bulleted"></i> Device versions
     </a>
   {% endif %}
   <form method="post" action="{% url 'plugins:main:configurationbackup_refresh' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">
-      <i class="mdi mdi-refresh"></i> Проверить конфигурацию
+      <i class="mdi mdi-refresh"></i> Validate configuration
     </button>
   </form>
   <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-success">
-      <i class="mdi mdi-backup-restore"></i> Отправить на устройство
+      <i class="mdi mdi-backup-restore"></i> Apply to device
     </button>
   </form>
 {% endblock %}
@@ -49,7 +49,7 @@
   {{ block.super }}
   <div class="card mt-3">
     <div class="card-header">
-      <h2 class="card-title">YAML конфигурации</h2>
+      <h2 class="card-title">Configuration YAML</h2>
     </div>
     <div class="card-body">
       <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ yaml_text }}</code></pre>

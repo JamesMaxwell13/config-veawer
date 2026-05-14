@@ -145,3 +145,26 @@ class CommandGeneratorCatalogTests(SimpleTestCase):
 
         self.assertFalse(valid)
         self.assertTrue(errors)
+
+    def test_validator_accepts_valid_netmask_and_wildcard_masks(self):
+        valid, errors = ConfigurationValidator.validate_commands(
+            [
+                "ip address 10.0.0.1 255.255.255.0",
+                "network 10.0.0.0 0.0.0.255",
+            ]
+        )
+
+        self.assertTrue(valid)
+        self.assertEqual(errors, [])
+
+    def test_validator_blocks_invalid_ipv4_and_mask_pairs(self):
+        valid, errors = ConfigurationValidator.validate_commands(
+            [
+                "ip address 10.0.0.999 255.255.255.0",
+                "ip route 10.10.10.0 255.0.255.0 192.0.2.1",
+            ]
+        )
+
+        self.assertFalse(valid)
+        self.assertTrue(any("Invalid IPv4 address" in item for item in errors))
+        self.assertTrue(any("Invalid IPv4 mask" in item for item in errors))

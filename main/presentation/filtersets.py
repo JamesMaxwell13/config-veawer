@@ -44,7 +44,16 @@ class DevicePlatformProfileFilterSet(NetBoxModelFilterSet):
 class CommandTemplateFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = CommandTemplate
-        fields = ("id", "name", "vendor", "platform", "operation_type")
+        fields = (
+            "id",
+            "name",
+            "vendor",
+            "platform",
+            "operation_type",
+            "bound_entity_type",
+            "bound_parameter",
+            "bound_direction",
+        )
 
 
 @register_filterset

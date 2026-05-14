@@ -5,6 +5,10 @@ templates:
     operation_type: custom
     revision: 1
     description: Set device system name.
+    bound_entity_type: device
+    bound_parameter: hostname
+    bound_direction: both
+    binding_priority: 10
     params: [hostname]
     command_body: |
       config snmp system_name {hostname}
@@ -14,6 +18,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Set port description.
+    bound_entity_type: interface
+    bound_parameter: description
+    bound_direction: both
+    binding_priority: 10
     params: [interface, description]
     command_body: |
       config ports {interface} description "{description}"
@@ -23,6 +31,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Disable a port.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       config ports {interface} state disable
@@ -32,6 +44,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Enable a port.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       config ports {interface} state enable
@@ -50,6 +66,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure untagged access VLAN on port.
+    bound_entity_type: interface
+    bound_parameter: access_vlan
+    bound_direction: both
+    binding_priority: 10
     params: [interface, vlan_id]
     command_body: |
       config vlan vlanid {vlan_id} add untagged {interface}
@@ -60,6 +80,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure tagged VLAN on trunk port.
+    bound_entity_type: interface
+    bound_parameter: tagged_vlans
+    bound_direction: both
+    binding_priority: 10
     params: [interface, vlan_id]
     command_body: |
       config vlan vlanid {vlan_id} add tagged {interface}

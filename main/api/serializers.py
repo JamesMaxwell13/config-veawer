@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from main.application.config_validation import ConfigurationInputValidator
+from main.domain.configuration import ConfigValidationError
 from main.models import (
     CommandTemplate,
     ConfigurationBackup,
@@ -78,6 +80,21 @@ class NetworkTaskSerializer(serializers.ModelSerializer):
 
 
 class ConfigurationBackupSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        instance = getattr(self, "instance", None)
+        device = attrs.get("device") or getattr(instance, "device", None)
+        config_text = attrs.get("config_text", getattr(instance, "config_text", ""))
+        if device and config_text:
+            try:
+                ConfigurationInputValidator.validate_backup_input_or_raise(
+                    device=device,
+                    config_text=config_text,
+                )
+            except ConfigValidationError as exc:
+                raise serializers.ValidationError(str(exc)) from exc
+        return attrs
+
     class Meta:
         model = ConfigurationBackup
         fields = "__all__"

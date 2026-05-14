@@ -26,6 +26,10 @@ class CatalogCommandTemplate:
     description: str = ""
     params: tuple[str, ...] = ()
     source: str = "catalog"
+    bound_entity_type: str = ""
+    bound_parameter: str = ""
+    bound_direction: str = "both"
+    binding_priority: int = 100
 
     @property
     def key(self) -> tuple[str, str, str, str]:
@@ -74,6 +78,10 @@ def _validate_template(raw: dict[str, Any], vendor: str, source: str) -> Catalog
         description=str(raw.get("description", "")),
         params=tuple(str(param) for param in params),
         source=source,
+        bound_entity_type=str(raw.get("bound_entity_type") or ""),
+        bound_parameter=str(raw.get("bound_parameter") or ""),
+        bound_direction=str(raw.get("bound_direction") or "both"),
+        binding_priority=int(raw.get("binding_priority", 100)),
     )
 
 

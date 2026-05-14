@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.cache import cache
 from django.db import models
@@ -11,13 +12,14 @@ from .infrastructure.crypto import decrypt_value, encrypt_value, is_encrypted
 
 
 class DeviceCredential(NetBoxModel):
-    AUTH_PASSWORD = "password"
-    AUTH_CHOICES = (
-        (AUTH_PASSWORD, "Username/Password"),
-    )
+    class AuthMethod(models.TextChoices):
+        PASSWORD = "password", "Username/Password"
+
+    AUTH_PASSWORD = AuthMethod.PASSWORD.value
+    AUTH_CHOICES = AuthMethod.choices
 
     name = models.CharField(max_length=100, unique=True)
-    auth_method = models.CharField(max_length=32, choices=AUTH_CHOICES, default=AUTH_PASSWORD)
+    auth_method = models.CharField(max_length=32, choices=AuthMethod.choices, default=AuthMethod.PASSWORD.value)
     username = models.CharField(max_length=128)
     password = models.CharField(max_length=255)
     enable_secret = models.CharField(max_length=255, blank=True)
@@ -28,8 +30,8 @@ class DeviceCredential(NetBoxModel):
 
     class Meta:
         ordering = ("name",)
-        verbose_name = "Учетные данные"
-        verbose_name_plural = "Учетные данные"
+        verbose_name = "Device credential"
+        verbose_name_plural = "Device credentials"
 
     def __str__(self) -> str:
         return self.name
@@ -97,21 +99,42 @@ class GitLabIntegration(NetBoxModel):
 
 
 class CommandTemplate(NetBoxModel):
-    OP_INTERFACE = "interface"
-    OP_VLAN = "vlan"
-    OP_IP = "ip"
-    OP_CUSTOM = "custom"
-    OP_CHOICES = (
-        (OP_INTERFACE, "Interface config"),
-        (OP_VLAN, "VLAN config"),
-        (OP_IP, "IP config"),
-        (OP_CUSTOM, "Custom"),
-    )
+    class OperationType(models.TextChoices):
+        INTERFACE = "interface", "Interface config"
+        VLAN = "vlan", "VLAN config"
+        IP = "ip", "IP config"
+        CUSTOM = "custom", "Custom"
+
+    class EntityType(models.TextChoices):
+        DEVICE = "device", "Device"
+        INTERFACE = "interface", "Interface"
+
+    class BindingDirection(models.TextChoices):
+        BOTH = "both", "Both"
+        NB_TO_CFG = "nb_to_cfg", "NetBox -> Config"
+        CFG_TO_NB = "cfg_to_nb", "Config -> NetBox"
+
+    OP_INTERFACE = OperationType.INTERFACE.value
+    OP_VLAN = OperationType.VLAN.value
+    OP_IP = OperationType.IP.value
+    OP_CUSTOM = OperationType.CUSTOM.value
+    OP_CHOICES = OperationType.choices
+    ENTITY_DEVICE = EntityType.DEVICE.value
+    ENTITY_INTERFACE = EntityType.INTERFACE.value
+    ENTITY_CHOICES = EntityType.choices
+    DIRECTION_BOTH = BindingDirection.BOTH.value
+    DIRECTION_NB_TO_CFG = BindingDirection.NB_TO_CFG.value
+    DIRECTION_CFG_TO_NB = BindingDirection.CFG_TO_NB.value
+    DIRECTION_CHOICES = BindingDirection.choices
 
     name = models.CharField(max_length=100)
     vendor = models.CharField(max_length=100)
     platform = models.CharField(max_length=100)
-    operation_type = models.CharField(max_length=32, choices=OP_CHOICES, default=OP_CUSTOM)
+    operation_type = models.CharField(max_length=32, choices=OperationType.choices, default=OperationType.CUSTOM.value)
+    bound_entity_type = models.CharField(max_length=16, choices=EntityType.choices, blank=True)
+    bound_parameter = models.CharField(max_length=64, blank=True)
+    bound_direction = models.CharField(max_length=16, choices=BindingDirection.choices, default=BindingDirection.BOTH.value)
+    binding_priority = models.PositiveIntegerField(default=100)
     command_body = models.TextField()
     is_active = models.BooleanField(default=True)
     revision = models.PositiveIntegerField(default=1)
@@ -119,8 +142,8 @@ class CommandTemplate(NetBoxModel):
     class Meta:
         ordering = ("vendor", "platform", "operation_type", "name")
         unique_together = ("name", "vendor", "platform", "operation_type")
-        verbose_name = "Шаблон команд"
-        verbose_name_plural = "Шаблоны команд"
+        verbose_name = "Command template"
+        verbose_name_plural = "Command templates"
 
     def __str__(self) -> str:
         return f"{self.name} ({self.vendor}/{self.platform})"
@@ -142,13 +165,16 @@ class CommandTemplate(NetBoxModel):
 
 
 class NetworkTask(NetBoxModel):
-    PLAN_YAML = "yaml"
-    PLAN_CHOICES = ((PLAN_YAML, "YAML"),)
+    class PlanFormat(models.TextChoices):
+        YAML = "yaml", "YAML"
+
+    PLAN_YAML = PlanFormat.YAML.value
+    PLAN_CHOICES = PlanFormat.choices
 
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     device_task = models.CharField(max_length=255)
-    plan_format = models.CharField(max_length=16, choices=PLAN_CHOICES, default=PLAN_YAML)
+    plan_format = models.CharField(max_length=16, choices=PlanFormat.choices, default=PlanFormat.YAML.value)
     plan_yaml = models.TextField()
     plan_checksum = models.CharField(max_length=64, blank=True)
     enabled = models.BooleanField(default=True)
@@ -156,8 +182,8 @@ class NetworkTask(NetBoxModel):
 
     class Meta:
         ordering = ("name",)
-        verbose_name = "Сценарий команд"
-        verbose_name_plural = "Сценарии команд"
+        verbose_name = "Network task"
+        verbose_name_plural = "Network tasks"
 
     def __str__(self) -> str:
         return self.name
@@ -188,8 +214,8 @@ class ConfigurationBackup(NetBoxModel):
     class Meta:
         ordering = ("-created",)
         unique_together = ("device", "version")
-        verbose_name = "Конфигурация"
-        verbose_name_plural = "Конфигурации"
+        verbose_name = "Configuration backup"
+        verbose_name_plural = "Configuration backups"
 
     def __str__(self) -> str:
         return f"{self.device} v{self.version}"
@@ -239,23 +265,24 @@ class GitLabConfigMapping(NetBoxModel):
 
 
 class GitLabSyncLog(NetBoxModel):
-    DIRECTION_GITLAB_TO_PLUGIN = "gitlab_to_plugin"
-    DIRECTION_PLUGIN_TO_GITLAB = "plugin_to_gitlab"
-    DIRECTION_CHOICES = (
-        (DIRECTION_GITLAB_TO_PLUGIN, "GitLab to plugin"),
-        (DIRECTION_PLUGIN_TO_GITLAB, "Plugin to GitLab"),
-    )
+    class Direction(models.TextChoices):
+        GITLAB_TO_PLUGIN = "gitlab_to_plugin", "GitLab to plugin"
+        PLUGIN_TO_GITLAB = "plugin_to_gitlab", "Plugin to GitLab"
 
-    STATUS_SUCCESS = "success"
-    STATUS_FAILED = "failed"
-    STATUS_SKIPPED = "skipped"
-    STATUS_CONFLICT = "conflict"
-    STATUS_CHOICES = (
-        (STATUS_SUCCESS, "Success"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_SKIPPED, "Skipped"),
-        (STATUS_CONFLICT, "Conflict"),
-    )
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+        CONFLICT = "conflict", "Conflict"
+
+    DIRECTION_GITLAB_TO_PLUGIN = Direction.GITLAB_TO_PLUGIN.value
+    DIRECTION_PLUGIN_TO_GITLAB = Direction.PLUGIN_TO_GITLAB.value
+    DIRECTION_CHOICES = Direction.choices
+    STATUS_SUCCESS = Status.SUCCESS.value
+    STATUS_FAILED = Status.FAILED.value
+    STATUS_SKIPPED = Status.SKIPPED.value
+    STATUS_CONFLICT = Status.CONFLICT.value
+    STATUS_CHOICES = Status.choices
 
     integration = models.ForeignKey(
         GitLabIntegration,
@@ -290,10 +317,10 @@ class GitLabSyncLog(NetBoxModel):
         blank=True,
         related_name="gitlab_sync_logs",
     )
-    direction = models.CharField(max_length=32, choices=DIRECTION_CHOICES)
+    direction = models.CharField(max_length=32, choices=Direction.choices)
     file_path = models.CharField(max_length=1024, blank=True)
     commit_sha = models.CharField(max_length=64, blank=True)
-    status = models.CharField(max_length=16, choices=STATUS_CHOICES)
+    status = models.CharField(max_length=16, choices=Status.choices)
     message = models.TextField(blank=True)
     created = models.DateTimeField(auto_now_add=True)
 
@@ -309,39 +336,121 @@ class GitLabSyncLog(NetBoxModel):
         return reverse("plugins:main:gitlabsynclog", kwargs={"pk": self.pk})
 
 
-class DevicePlatformProfile(NetBoxModel):
-    VENDOR_CISCO = "cisco"
-    VENDOR_DLINK = "dlink"
-    VENDOR_CHOICES = (
-        (VENDOR_CISCO, "Cisco"),
-        (VENDOR_DLINK, "D-Link"),
-    )
+class ParameterSyncLog(NetBoxModel):
+    class Direction(models.TextChoices):
+        NETBOX_TO_CONFIG = "netbox_to_config", "NetBox to config"
+        CONFIG_TO_NETBOX = "config_to_netbox", "Config to NetBox"
 
-    PLATFORM_CISCO_IOS = "cisco_ios"
-    PLATFORM_CISCO_XE = "cisco_xe"
-    PLATFORM_CISCO_NXOS = "cisco_nxos"
-    PLATFORM_DLINK_DS = "dlink_ds"
-    PLATFORM_DLINK_DGS = "dlink_dgs"
-    PLATFORM_CHOICES = (
-        (PLATFORM_CISCO_IOS, "Cisco IOS"),
-        (PLATFORM_CISCO_XE, "Cisco IOS-XE"),
-        (PLATFORM_CISCO_NXOS, "Cisco NX-OS"),
-        (PLATFORM_DLINK_DS, "D-Link DS"),
-        (PLATFORM_DLINK_DGS, "D-Link DGS"),
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        SKIPPED = "skipped", "Skipped"
+
+    DIRECTION_NETBOX_TO_CONFIG = Direction.NETBOX_TO_CONFIG.value
+    DIRECTION_CONFIG_TO_NETBOX = Direction.CONFIG_TO_NETBOX.value
+    DIRECTION_CHOICES = Direction.choices
+    STATUS_SUCCESS = Status.SUCCESS.value
+    STATUS_FAILED = Status.FAILED.value
+    STATUS_SKIPPED = Status.SKIPPED.value
+    STATUS_CHOICES = Status.choices
+
+    device = models.ForeignKey("dcim.Device", on_delete=models.CASCADE, related_name="parameter_sync_logs")
+    configuration_backup = models.ForeignKey(
+        ConfigurationBackup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="parameter_sync_logs",
     )
+    direction = models.CharField(max_length=32, choices=Direction.choices)
+    status = models.CharField(max_length=16, choices=Status.choices)
+    origin = models.CharField(max_length=64, blank=True)
+    changed_fields = models.JSONField(default=list, blank=True)
+    correlation_id = models.CharField(max_length=64, blank=True)
+    message = models.TextField(blank=True)
+    created = models.DateTimeField(auto_now_add=True, null=True)
+
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "Parameter sync log"
+        verbose_name_plural = "Parameter sync logs"
+
+    def __str__(self) -> str:
+        return f"{self.device} {self.direction} {self.status}"
+
+    def get_absolute_url(self):
+        return ""
+
+
+class CredentialRevealAudit(NetBoxModel):
+    class Status(models.TextChoices):
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+        BLOCKED = "blocked", "Blocked"
+
+    credential = models.ForeignKey(
+        DeviceCredential,
+        on_delete=models.CASCADE,
+        related_name="reveal_audits",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="config_weaver_credential_reveal_audits",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices)
+    reason = models.CharField(max_length=128, blank=True)
+    source_ip = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "Credential reveal audit"
+        verbose_name_plural = "Credential reveal audits"
+
+    def __str__(self) -> str:
+        return f"{self.credential} {self.status} {self.created}"
+
+    def get_absolute_url(self):
+        return ""
+
+
+class DevicePlatformProfile(NetBoxModel):
+    class Vendor(models.TextChoices):
+        CISCO = "cisco", "Cisco"
+        DLINK = "dlink", "D-Link"
+
+    class Platform(models.TextChoices):
+        CISCO_IOS = "cisco_ios", "Cisco IOS"
+        CISCO_XE = "cisco_xe", "Cisco IOS-XE"
+        CISCO_NXOS = "cisco_nxos", "Cisco NX-OS"
+        DLINK_DS = "dlink_ds", "D-Link DS"
+        DLINK_DGS = "dlink_dgs", "D-Link DGS"
+
+    VENDOR_CISCO = Vendor.CISCO.value
+    VENDOR_DLINK = Vendor.DLINK.value
+    VENDOR_CHOICES = Vendor.choices
+    PLATFORM_CISCO_IOS = Platform.CISCO_IOS.value
+    PLATFORM_CISCO_XE = Platform.CISCO_XE.value
+    PLATFORM_CISCO_NXOS = Platform.CISCO_NXOS.value
+    PLATFORM_DLINK_DS = Platform.DLINK_DS.value
+    PLATFORM_DLINK_DGS = Platform.DLINK_DGS.value
+    PLATFORM_CHOICES = Platform.choices
 
     device = models.OneToOneField("dcim.Device", on_delete=models.CASCADE, related_name="config_weaver_profile")
     credential = models.ForeignKey(DeviceCredential, on_delete=models.PROTECT, related_name="device_profiles")
-    vendor = models.CharField(max_length=16, choices=VENDOR_CHOICES)
-    platform = models.CharField(max_length=32, choices=PLATFORM_CHOICES)
+    vendor = models.CharField(max_length=16, choices=Vendor.choices)
+    platform = models.CharField(max_length=32, choices=Platform.choices)
     management_ip = models.GenericIPAddressField(protocol="IPv4", null=True, blank=True)
     command_timeout = models.PositiveIntegerField(default=60)
     enabled = models.BooleanField(default=True)
 
     class Meta:
         ordering = ("device",)
-        verbose_name = "Устройство"
-        verbose_name_plural = "Устройства"
+        verbose_name = "Device profile"
+        verbose_name_plural = "Device profiles"
 
     def __str__(self) -> str:
         return str(self.device)
@@ -366,32 +475,33 @@ class DevicePlatformProfile(NetBoxModel):
 
 
 class ScheduledTask(NetBoxModel):
-    TYPE_APPLY_SCENARIO = "apply_scenario"
-    TYPE_BACKUP = "backup"
-    TYPE_HEALTHCHECK = "healthcheck"
-    TYPE_CHOICES = (
-        (TYPE_APPLY_SCENARIO, "Применить сценарий"),
-        (TYPE_BACKUP, "Сохранить конфигурацию"),
-        (TYPE_HEALTHCHECK, "Проверить подключение"),
-    )
+    class TaskType(models.TextChoices):
+        APPLY_SCENARIO = "apply_scenario", "Apply scenario"
+        BACKUP = "backup", "Save configuration"
+        HEALTHCHECK = "healthcheck", "Check connectivity"
 
-    STATUS_PENDING = "pending"
-    STATUS_RUNNING = "running"
-    STATUS_SUCCESS = "success"
-    STATUS_FAILED = "failed"
-    STATUS_CHOICES = (
-        (STATUS_PENDING, "Pending"),
-        (STATUS_RUNNING, "Running"),
-        (STATUS_SUCCESS, "Success"),
-        (STATUS_FAILED, "Failed"),
-    )
+    class TaskStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        FAILED = "failed", "Failed"
+
+    TYPE_APPLY_SCENARIO = TaskType.APPLY_SCENARIO.value
+    TYPE_BACKUP = TaskType.BACKUP.value
+    TYPE_HEALTHCHECK = TaskType.HEALTHCHECK.value
+    TYPE_CHOICES = TaskType.choices
+    STATUS_PENDING = TaskStatus.PENDING.value
+    STATUS_RUNNING = TaskStatus.RUNNING.value
+    STATUS_SUCCESS = TaskStatus.SUCCESS.value
+    STATUS_FAILED = TaskStatus.FAILED.value
+    STATUS_CHOICES = TaskStatus.choices
 
     task_name = models.CharField(max_length=150)
-    task_type = models.CharField(max_length=40, choices=TYPE_CHOICES)
+    task_type = models.CharField(max_length=40, choices=TaskType.choices)
     target_device = models.ForeignKey("dcim.Device", on_delete=models.CASCADE, related_name="scheduled_tasks")
-    task = models.TextField(blank=True, verbose_name="Таск (YAML)")
+    task = models.TextField(blank=True, verbose_name="Task (YAML)")
     schedule_time = models.DateTimeField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    status = models.CharField(max_length=20, choices=TaskStatus.choices, default=TaskStatus.PENDING.value)
     result_message = models.TextField(blank=True)
     run_every_seconds = models.PositiveIntegerField(null=True, blank=True)
     last_run_at = models.DateTimeField(null=True, blank=True)
@@ -400,8 +510,8 @@ class ScheduledTask(NetBoxModel):
 
     class Meta:
         ordering = ("schedule_time",)
-        verbose_name = "Задача планировщика"
-        verbose_name_plural = "Планировщик задач"
+        verbose_name = "Scheduled task"
+        verbose_name_plural = "Scheduled tasks"
 
     def __str__(self) -> str:
         return self.task_name
@@ -425,17 +535,18 @@ class ScheduledTask(NetBoxModel):
 
 
 class UMLConfiguration(NetBoxModel):
-    TYPE_PLANTUML = "plantuml"
-    TYPE_MERMAID = "mermaid"
-    TYPE_JSON = "json"
-    TYPE_CHOICES = (
-        (TYPE_PLANTUML, "PlantUML"),
-        (TYPE_MERMAID, "Mermaid"),
-        (TYPE_JSON, "JSON"),
-    )
+    class DiagramType(models.TextChoices):
+        PLANTUML = "plantuml", "PlantUML"
+        MERMAID = "mermaid", "Mermaid"
+        JSON = "json", "JSON"
+
+    TYPE_PLANTUML = DiagramType.PLANTUML.value
+    TYPE_MERMAID = DiagramType.MERMAID.value
+    TYPE_JSON = DiagramType.JSON.value
+    TYPE_CHOICES = DiagramType.choices
 
     name = models.CharField(max_length=150)
-    diagram_type = models.CharField(max_length=16, choices=TYPE_CHOICES, default=TYPE_PLANTUML)
+    diagram_type = models.CharField(max_length=16, choices=DiagramType.choices, default=DiagramType.PLANTUML.value)
     task = models.ForeignKey(
         NetworkTask, on_delete=models.CASCADE, related_name="uml_configurations", null=True, blank=True
     )
@@ -449,8 +560,8 @@ class UMLConfiguration(NetBoxModel):
     class Meta:
         ordering = ("name", "-revision")
         unique_together = ("name", "revision")
-        verbose_name = "UML-описание"
-        verbose_name_plural = "UML-описания"
+        verbose_name = "UML definition"
+        verbose_name_plural = "UML definitions"
 
     def __str__(self) -> str:
         return f"{self.name} r{self.revision}"

@@ -85,6 +85,8 @@ PLUGINS_CONFIG = {
         "secret_key": "replace-with-a-long-random-plugin-secret",
         "vcs_repo_path": "config-weaver-vcs",
         "scheduler_max_workers": 8,
+        "credential_reveal_max_attempts": 5,
+        "credential_reveal_window_seconds": 300,
     }
 }
 ```
@@ -96,6 +98,41 @@ PLUGINS_CONFIG = {
 `vcs_repo_path` необязателен. Если он не задан, плагин использует `MEDIA_ROOT/config_weaver_repo`.
 
 `scheduler_max_workers` необязателен. Некорректные значения заменяются на `8`, значения меньше `1` считаются равными `1`.
+
+`credential_reveal_max_attempts` и `credential_reveal_window_seconds` необязательны. Определяют лимит неуспешных подтверждений при раскрытии секретов в UI (по умолчанию `5` попыток за `300` секунд на пользователя и credential).
+
+## Архитектура (4 слоя)
+
+Код плагина разделен на 4 уровня:
+
+- `domain/` - правила предметной области (парсинг/валидация конфигурации, каталог команд, редактирование секретов в текстах).
+- `infrastructure/` - интеграции и технические детали (SSH/netmiko, Git/GitLab, криптография, репозитории).
+- `application/` - сценарии использования и оркестрация (task execution, refresh/apply, sync, security policy).
+- `presentation/` - UI и входные точки (forms, tables, views, filtersets, templates).
+
+Поток зависимостей: `presentation -> application -> domain/infrastructure`.  
+`domain` не зависит от `presentation`, а `infrastructure` не содержит бизнес-решений.
+
+## Безопасность Учётных Данных
+
+Что защищено:
+
+- Пароли устройств, `enable_secret`, GitLab token и webhook secret хранятся в БД в зашифрованном виде (`Fernet`, ключ от `PLUGINS_CONFIG['main']['secret_key']`).
+- Раскрытие секрета в UI требует повторного подтверждения логина/пароля текущего NetBox-пользователя.
+- Для раскрытия секрета добавлен rate limit (настраиваемый) и аудит попыток (`CredentialRevealAudit`: success/failed/blocked, user, IP, user-agent, причина).
+- При старте плагина выполняется проверка security-конфигурации (наличие `secret_key`; предупреждения для слабого/placeholder ключа).
+
+Ограничения и риски:
+
+- Секреты расшифровываются в памяти процесса NetBox в момент реального использования (SSH/GitLab), это неизбежно.
+- При компрометации хоста/процесса NetBox атакующий может получить доступ к расшифрованным данным в runtime.
+- Ротация `secret_key` без миграции данных сделает ранее зашифрованные значения нечитаемыми.
+
+Практические рекомендации:
+
+- Использовать длинный случайный `secret_key` (минимум 32+ символа) и хранить его в защищенном секрет-хранилище/ENV.
+- Ограничить доступ к UI/DB/логам и включить MFA/SSO для администраторов NetBox.
+- Периодически ротировать device/GitLab credentials и контролировать журнал `CredentialRevealAudit`.
 
 ## База Данных И Начальные Данные
 

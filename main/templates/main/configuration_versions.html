@@ -1,19 +1,19 @@
 {% extends 'generic/object.html' %}
 
-{% block title %}Конфигурации устройства{% endblock %}
+{% block title %}Device configurations{% endblock %}
 
 {% block content %}
 <div class="card mt-3">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Конфигурации устройства {{ device.name }}</span>
+    <span>Device configurations {{ device.name }}</span>
     <div class="btn-list justify-content-end">
       <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=object.pk %}" class="d-inline-block">
         {% csrf_token %}
         <button type="submit" class="btn btn-sm btn-info">
-          <i class="mdi mdi-refresh"></i> Получить конфигурацию
+          <i class="mdi mdi-refresh"></i> Refresh configuration
         </button>
       </form>
-      <a class="btn btn-sm btn-secondary" href="{% url 'dcim:device' pk=device.pk %}">Устройство NetBox</a>
+      <a class="btn btn-sm btn-secondary" href="{% url 'dcim:device' pk=device.pk %}">NetBox device</a>
     </div>
   </div>
   <div class="card-body">
@@ -21,22 +21,22 @@
       <input type="hidden" name="from" id="configuration-compare-from">
       <input type="hidden" name="to" id="configuration-compare-to">
       <button type="submit" id="configuration-compare-button" class="btn btn-primary d-none" disabled>
-        Сравнить
+        Compare
       </button>
     </form>
 
     <table class="table table-hover">
-      <thead><tr><th></th><th>Версия</th><th>Название</th><th>Source</th><th>Дата</th><th>Checksum</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Version</th><th>Name</th><th>Source</th><th>Date</th><th>Checksum</th><th></th></tr></thead>
       <tbody>
       {% for v in versions %}
         <tr>
           <td>
-            <input class="form-check-input configuration-version-checkbox" type="checkbox" value="{{ v.version }}" aria-label="Выбрать v{{ v.version }} для сравнения">
+            <input class="form-check-input configuration-version-checkbox" type="checkbox" value="{{ v.version }}" aria-label="Select v{{ v.version }} for comparison">
           </td>
           <td>
             v{{ v.version }}
             {% if current_version and v.pk == current_version.pk %}
-              <span class="badge text-bg-success ms-1">Текущая</span>
+              <span class="badge text-bg-success ms-1">Current</span>
             {% endif %}
           </td>
           <td>
@@ -57,16 +57,16 @@
                 <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=v.pk %}" class="d-inline-block">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-sm btn-success">
-                    <i class="mdi mdi-backup-restore"></i> Отправить
+                    <i class="mdi mdi-backup-restore"></i> Apply
                   </button>
                 </form>
               {% endif %}
-              <a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Открыть</a>
+              <a class="btn btn-sm btn-primary" href="{{ v.get_absolute_url }}">Open</a>
             </div>
           </td>
         </tr>
       {% empty %}
-        <tr><td colspan="7" class="text-muted">Конфигураций пока нет.</td></tr>
+        <tr><td colspan="7" class="text-muted">No configurations yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

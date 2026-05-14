@@ -90,7 +90,7 @@
 
   function connect() {
     socket = new WebSocket(websocketUrl(root.dataset.wsPath));
-    setStatus("Подключение", "text-secondary");
+    setStatus("Connecting", "text-secondary");
 
     socket.addEventListener("open", () => {
       setStatus("SSH", "text-info");
@@ -110,24 +110,24 @@
       } else if (message.type === "status") {
         if (message.state === "connected") {
           connected = true;
-          setStatus("Подключено", "text-success");
+          setStatus("Connected", "text-success");
           input.disabled = false;
           sendButton.disabled = false;
           input.focus();
         } else if (message.state === "connecting") {
-          setStatus("Подключение", "text-secondary");
+          setStatus("Connecting", "text-secondary");
         }
       } else if (message.type === "error") {
         appendOutput(`\n[ERROR] ${message.message}\n`);
-        setStatus("Ошибка", "text-danger");
+        setStatus("Error", "text-danger");
       }
     });
 
     socket.addEventListener("close", () => {
       if (!connected && !disconnectRequested) {
-        setStatus("Невозможно подключиться", "text-danger");
+        setStatus("Connection failed", "text-danger");
       } else {
-        setStatus("Отключено", "text-secondary");
+        setStatus("Disconnected", "text-secondary");
       }
       input.disabled = true;
       sendButton.disabled = true;
@@ -137,8 +137,8 @@
     });
 
     socket.addEventListener("error", () => {
-      appendOutput("\n[ERROR] Ошибка WebSocket-соединения\n");
-      setStatus("Невозможно подключиться", "text-danger");
+      appendOutput("\n[ERROR] WebSocket connection error\n");
+      setStatus("Connection failed", "text-danger");
     });
   }
 

@@ -1,7 +1,7 @@
 {% extends 'base/layout.html' %}
 {% load static %}
 
-{% block title %}Терминал {{ object.device }}{% endblock %}
+{% block title %}Terminal {{ object.device }}{% endblock %}
 
 {% block head %}
   {{ block.super }}
@@ -22,18 +22,18 @@
 {% block content %}
   <div class="d-grid align-items-center gap-3 mb-3" style="grid-template-columns: 1fr auto 1fr;">
     <div>
-      <h1 class="h2 mb-1">Терминал {{ object.device }}</h1>
+      <h1 class="h2 mb-1">Terminal {{ object.device }}</h1>
       <div class="text-muted">
         {{ object.get_platform_display }}{% if object.management_ip %} · {{ object.management_ip }}{% endif %}
       </div>
     </div>
-    <span id="terminal-status" class="terminal-status text-secondary text-center">Подключение</span>
+    <span id="terminal-status" class="terminal-status text-secondary text-center">Connecting</span>
     <div class="btn-list align-items-center justify-content-end">
       <a class="btn btn-secondary" href="{{ object.get_absolute_url }}">
-        <i class="mdi mdi-arrow-left"></i> К устройству
+        <i class="mdi mdi-arrow-left"></i> Back to device
       </a>
       <button type="button" class="btn btn-danger" id="terminal-disconnect">
-        <i class="mdi mdi-lan-disconnect"></i> Отключиться
+        <i class="mdi mdi-lan-disconnect"></i> Disconnect
       </button>
     </div>
   </div>
@@ -57,10 +57,10 @@
           rows="2"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Введите команду и нажмите Enter"
+          placeholder="Type command and press Enter"
         ></textarea>
         <button type="button" class="btn btn-primary" id="terminal-send">
-          <i class="mdi mdi-send"></i> Отправить
+          <i class="mdi mdi-send"></i> Send
         </button>
       </div>
     </div>

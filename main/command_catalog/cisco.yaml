@@ -5,6 +5,10 @@ templates:
     operation_type: custom
     revision: 1
     description: Set device hostname.
+    bound_entity_type: device
+    bound_parameter: hostname
+    bound_direction: both
+    binding_priority: 10
     params: [hostname]
     command_body: |
       hostname {hostname}
@@ -185,6 +189,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Set interface description.
+    bound_entity_type: interface
+    bound_parameter: description
+    bound_direction: both
+    binding_priority: 10
     params: [interface, description]
     command_body: |
       interface {interface}
@@ -204,6 +212,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Set description under an interface.
+    bound_entity_type: interface
+    bound_parameter: description
+    bound_direction: both
+    binding_priority: 20
     params: [interface, description]
     command_body: |
       interface {interface}
@@ -214,6 +226,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Shut down an interface.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       interface {interface}
@@ -224,6 +240,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Enable an interface.
+    bound_entity_type: interface
+    bound_parameter: enabled
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       interface {interface}
@@ -327,6 +347,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Configure interface duplex.
+    bound_entity_type: interface
+    bound_parameter: duplex
+    bound_direction: both
+    binding_priority: 10
     params: [interface, duplex]
     command_body: |
       interface {interface}
@@ -337,6 +361,10 @@ templates:
     operation_type: interface
     revision: 1
     description: Configure interface speed.
+    bound_entity_type: interface
+    bound_parameter: speed
+    bound_direction: both
+    binding_priority: 10
     params: [interface, speed]
     command_body: |
       interface {interface}
@@ -347,6 +375,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure trunk native VLAN.
+    bound_entity_type: interface
+    bound_parameter: native_vlan
+    bound_direction: both
+    binding_priority: 10
     params: [interface, vlan_id]
     command_body: |
       interface {interface}
@@ -357,6 +389,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure trunk allowed VLAN list.
+    bound_entity_type: interface
+    bound_parameter: tagged_vlans
+    bound_direction: both
+    binding_priority: 10
     params: [interface, vlan_list]
     command_body: |
       interface {interface}
@@ -446,6 +482,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure an access port VLAN.
+    bound_entity_type: interface
+    bound_parameter: access_vlan
+    bound_direction: both
+    binding_priority: 10
     params: [interface, vlan_id]
     command_body: |
       interface {interface}
@@ -458,6 +498,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Set switchport access mode.
+    bound_entity_type: interface
+    bound_parameter: mode
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       interface {interface}
@@ -468,6 +512,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Assign access VLAN to switchport.
+    bound_entity_type: interface
+    bound_parameter: access_vlan
+    bound_direction: both
+    binding_priority: 20
     params: [interface, vlan_id]
     command_body: |
       interface {interface}
@@ -478,6 +526,10 @@ templates:
     operation_type: vlan
     revision: 1
     description: Configure a trunk port allowed VLAN list.
+    bound_entity_type: interface
+    bound_parameter: tagged_vlans
+    bound_direction: both
+    binding_priority: 20
     params: [interface, vlan_list]
     command_body: |
       interface {interface}
@@ -490,10 +542,56 @@ templates:
     operation_type: vlan
     revision: 1
     description: Set switchport trunk mode.
+    bound_entity_type: interface
+    bound_parameter: mode
+    bound_direction: both
+    binding_priority: 10
     params: [interface]
     command_body: |
       interface {interface}
       switchport mode trunk
+
+  - name: interface_mtu
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface MTU.
+    bound_entity_type: interface
+    bound_parameter: mtu
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, mtu]
+    command_body: |
+      interface {interface}
+      mtu {mtu}
+
+  - name: interface_poe_mode
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface PoE mode.
+    bound_entity_type: interface
+    bound_parameter: poe_mode
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, poe_mode]
+    command_body: |
+      interface {interface}
+      power inline {poe_mode}
+
+  - name: interface_poe_type
+    platform: cisco_ios
+    operation_type: interface
+    revision: 1
+    description: Configure interface PoE type/profile.
+    bound_entity_type: interface
+    bound_parameter: poe_type
+    bound_direction: both
+    binding_priority: 10
+    params: [interface, poe_type]
+    command_body: |
+      interface {interface}
+      power inline port {poe_type}
 
   - name: default_gateway
     platform: cisco_ios

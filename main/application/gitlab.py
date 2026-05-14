@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from ..application.configuration_yaml import ConfigurationYamlService
+from ..application.interface_sync import InterfaceSyncService
 from ..application.tasks import TaskExecutor
 from ..domain.configuration import ConfigValidationError, NetworkPlanParser
 from ..infrastructure.gitlab import (
@@ -351,6 +352,8 @@ class GitLabIntegrationService:
             if mapping.scheduled_task_id:
                 mapping.scheduled_task = None
                 mapping.save(update_fields=("scheduled_task", "last_updated"))
+
+        InterfaceSyncService.sync_from_configuration_backup(backup, origin="gitlab_import")
 
         message = "Configuration imported from GitLab."
         if integration.auto_apply:

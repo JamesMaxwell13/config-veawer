@@ -3,11 +3,19 @@ from django.urls import reverse
 from users.models import User
 
 from main.infrastructure.crypto import decrypt_value, encrypt_value, is_encrypted
-from main.models import DeviceCredential
+from main.models import CredentialRevealAudit, DeviceCredential
 from main.presentation.forms import DeviceCredentialForm
 
 
-@override_settings(PLUGINS_CONFIG={"main": {"secret_key": "test-secret-key"}})
+@override_settings(
+    PLUGINS_CONFIG={
+        "main": {
+            "secret_key": "test-secret-key",
+            "credential_reveal_max_attempts": 2,
+            "credential_reveal_window_seconds": 60,
+        }
+    }
+)
 class CryptoAndModelTests(TestCase):
     def test_encrypt_decrypt_roundtrip(self):
         encrypted = encrypt_value("my-password")
@@ -77,7 +85,7 @@ class CryptoAndModelTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk}))
-        self.assertContains(response, "Показать пароль")
+        self.assertContains(response, "Reveal secret")
         self.assertContains(response, "btn-danger")
         self.assertNotContains(response, "plain-pass")
 
@@ -100,12 +108,19 @@ class CryptoAndModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Для просмотра пароля подтвердите")
+        self.assertNotContains(response, "Confirm your NetBox account username")
         self.assertNotContains(response, "account_username")
         self.assertNotContains(response, "account_password")
         self.assertContains(response, "device-admin")
         self.assertContains(response, "plain-pass")
         self.assertContains(response, "plain-enable")
+        self.assertTrue(
+            CredentialRevealAudit.objects.filter(
+                credential=cred,
+                status="success",
+                reason="confirmed",
+            ).exists()
+        )
 
     def test_reveal_credential_rejects_wrong_netbox_username(self):
         user = User.objects.create_superuser(username="admin", password="netbox-pass")
@@ -125,7 +140,7 @@ class CryptoAndModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Неверный логин учетной записи NetBox.")
+        self.assertContains(response, "Invalid NetBox account username.")
         self.assertNotContains(response, "plain-pass")
 
     def test_reveal_credential_rejects_wrong_netbox_password(self):
@@ -146,5 +161,38 @@ class CryptoAndModelTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Неверный пароль учетной записи NetBox.")
+        self.assertContains(response, "Invalid NetBox account password.")
         self.assertNotContains(response, "plain-pass")
+
+    def test_reveal_credential_rate_limit_blocks_after_failed_attempts(self):
+        user = User.objects.create_superuser(username="admin", password="netbox-pass")
+        cred = DeviceCredential.objects.create(
+            name="cred1",
+            username="device-admin",
+            password="plain-pass",
+        )
+        self.client.force_login(user)
+        url = reverse("plugins:main:devicecredential_reveal", kwargs={"pk": cred.pk})
+
+        self.client.post(
+            url,
+            {"account_username": "admin", "account_password": "wrong-1"},
+        )
+        self.client.post(
+            url,
+            {"account_username": "admin", "account_password": "wrong-2"},
+        )
+        blocked = self.client.post(
+            url,
+            {"account_username": "admin", "account_password": "netbox-pass"},
+        )
+
+        self.assertEqual(blocked.status_code, 200)
+        self.assertContains(blocked, "Too many failed confirmation attempts.")
+        self.assertTrue(
+            CredentialRevealAudit.objects.filter(
+                credential=cred,
+                status="blocked",
+                reason="rate_limited",
+            ).exists()
+        )

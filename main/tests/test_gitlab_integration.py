@@ -326,7 +326,7 @@ class GitLabIntegrationTests(TestCase):
         with patch("main.application.tasks.connect_device_cli", return_value=(session, profile, {"checked": False})):
             result = TaskExecutor._apply_commands(profile, task, ["hostname gitlab-target", "write memory"])
 
-        self.assertIn("новая версия не создана", result)
+        self.assertIn("no new version created", result)
         session.send_config_set.assert_called_once_with(["hostname gitlab-target", "write memory"])
         self.assertFalse(ConfigurationBackup.objects.filter(device=self.device, source="runtime").exists())
         self.assertFalse(ConfigurationBackup.objects.filter(device=self.device, source="pre_apply").exists())

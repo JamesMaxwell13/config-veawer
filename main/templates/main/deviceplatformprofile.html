@@ -3,15 +3,15 @@
 {% block extra_controls %}
   {{ block.super }}
   <a class="btn btn-secondary ms-1" href="{% url 'dcim:device' pk=object.device.pk %}">
-    <i class="mdi mdi-server-network"></i> Устройство NetBox
+    <i class="mdi mdi-server-network"></i> NetBox device
   </a>
   <a class="btn btn-primary ms-1" href="{% url 'plugins:main:deviceplatformprofile_terminal' pk=object.pk %}">
-    <i class="mdi mdi-console"></i> Терминал
+    <i class="mdi mdi-console"></i> Terminal
   </a>
   <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=object.pk %}" class="d-inline-block ms-1">
     {% csrf_token %}
     <button type="submit" class="btn btn-info">
-      <i class="mdi mdi-refresh"></i> Получить конфигурацию
+      <i class="mdi mdi-refresh"></i> Refresh configuration
     </button>
   </form>
 {% endblock %}
@@ -22,26 +22,26 @@
   <div class="row mt-3">
     <div class="col col-md-6">
       <div class="card">
-        <h5 class="card-header">Профиль устройства</h5>
+        <h5 class="card-header">Device profile</h5>
         <div class="card-body">
           <dl class="row mb-0">
-            <dt class="col-sm-5">Устройство NetBox</dt>
+            <dt class="col-sm-5">NetBox device</dt>
             <dd class="col-sm-7"><a href="{% url 'dcim:device' pk=object.device.pk %}">{{ object.device }}</a></dd>
-            <dt class="col-sm-5">Учетные данные</dt>
+            <dt class="col-sm-5">Credential</dt>
             <dd class="col-sm-7"><a href="{{ object.credential.get_absolute_url }}">{{ object.credential }}</a></dd>
-            <dt class="col-sm-5">Вендор</dt>
+            <dt class="col-sm-5">Vendor</dt>
             <dd class="col-sm-7">{{ object.get_vendor_display }}</dd>
-            <dt class="col-sm-5">Платформа</dt>
+            <dt class="col-sm-5">Platform</dt>
             <dd class="col-sm-7">{{ object.get_platform_display }}</dd>
             <dt class="col-sm-5">Management IP</dt>
             <dd class="col-sm-7">{{ object.management_ip|default:"-" }}</dd>
             <dt class="col-sm-5">Command timeout</dt>
             <dd class="col-sm-7">{{ object.command_timeout }}</dd>
-            <dt class="col-sm-5">Включен</dt>
-            <dd class="col-sm-7">{{ object.enabled|yesno:"Да,Нет" }}</dd>
-            <dt class="col-sm-5">Создан</dt>
+            <dt class="col-sm-5">Enabled</dt>
+            <dd class="col-sm-7">{{ object.enabled|yesno:"Yes,No" }}</dd>
+            <dt class="col-sm-5">Created</dt>
             <dd class="col-sm-7">{{ object.created }}</dd>
-            <dt class="col-sm-5">Обновлен</dt>
+            <dt class="col-sm-5">Updated</dt>
             <dd class="col-sm-7">{{ object.last_updated }}</dd>
           </dl>
         </div>
@@ -49,16 +49,16 @@
     </div>
     <div class="col col-md-6">
       <div class="card">
-        <h5 class="card-header">Доступные команды</h5>
+        <h5 class="card-header">Available commands</h5>
         <div class="card-body">
           <dl class="row mb-3">
-            <dt class="col-sm-4">Вендор</dt>
+            <dt class="col-sm-4">Vendor</dt>
             <dd class="col-sm-8">{{ object.get_vendor_display }}</dd>
-            <dt class="col-sm-4">Платформа</dt>
+            <dt class="col-sm-4">Platform</dt>
             <dd class="col-sm-8">{{ object.get_platform_display }}</dd>
           </dl>
           <a class="btn btn-primary" href="{{ command_template_url }}">
-            <i class="mdi mdi-format-list-bulleted"></i> Открыть команды
+            <i class="mdi mdi-format-list-bulleted"></i> Open commands
           </a>
         </div>
       </div>
@@ -66,11 +66,11 @@
   </div>
 
   <div class="card mt-3">
-    <h5 class="card-header">Ближайшие задачи планировщика</h5>
+    <h5 class="card-header">Upcoming scheduled tasks</h5>
     <div class="card-body">
       <table class="table table-hover">
         <thead>
-          <tr><th>Задача</th><th>Тип</th><th>Время</th><th>Статус</th></tr>
+          <tr><th>Task</th><th>Type</th><th>Time</th><th>Status</th></tr>
         </thead>
         <tbody>
           {% for task in scheduled_tasks %}
@@ -81,7 +81,7 @@
               <td>{{ task.get_status_display }}</td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="text-muted">Запланированных задач нет.</td></tr>
+            <tr><td colspan="4" class="text-muted">No scheduled tasks.</td></tr>
           {% endfor %}
         </tbody>
       </table>

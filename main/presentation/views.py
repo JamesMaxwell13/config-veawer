@@ -18,6 +18,7 @@ from . import filtersets, forms, tables
 from ..application.backups import ConfigurationService
 from ..application.configuration_yaml import ConfigurationYamlService
 from ..application.gitlab import GitLabIntegrationService
+from ..application.security import CredentialRevealService
 from ..application.tasks import TaskExecutor
 from ..application.uml import UMLConfigurationService
 from ..domain.configuration import CommandGenerator
@@ -27,6 +28,7 @@ from ..logging import device_log_context, logger
 from ..models import (
     CommandTemplate,
     ConfigurationBackup,
+    CredentialRevealAudit,
     DeviceCredential,
     DevicePlatformProfile,
     GitLabConfigMapping,
@@ -65,9 +67,13 @@ class DeviceCredentialView(generic.ObjectView):
     queryset = DeviceCredential.objects.all()
 
 
-class DeviceCredentialRevealView(FormView):
+class DeviceCredentialRevealView(ObjectPermissionRequiredMixin, FormView):
     template_name = "main/devicecredential_reveal.html"
     form_class = forms.CredentialRevealForm
+    queryset = DeviceCredential.objects.all()
+
+    def get_required_permission(self):
+        return "main.view_devicecredential"
 
     def dispatch(self, request, *args, **kwargs):
         self.credential = get_object_or_404(DeviceCredential, pk=kwargs["pk"])
@@ -79,14 +85,51 @@ class DeviceCredentialRevealView(FormView):
         return context
 
     def form_valid(self, form):
+        user_id = self.request.user.pk if self.request.user.is_authenticated else None
+        state = CredentialRevealService.attempt_state(user_id, self.credential.pk)
+        if state.blocked:
+            form.add_error(
+                None,
+                f"Too many failed confirmation attempts. Try again in about {state.wait_seconds} seconds.",
+            )
+            CredentialRevealService.audit(
+                request=self.request,
+                credential=self.credential,
+                status=CredentialRevealAudit.Status.BLOCKED,
+                reason="rate_limited",
+            )
+            return self.form_invalid(form)
+
         username = form.cleaned_data["account_username"]
         password = form.cleaned_data["account_password"]
         if username != self.request.user.get_username():
-            form.add_error("account_username", "Неверный логин учетной записи NetBox.")
+            form.add_error("account_username", "Invalid NetBox account username.")
+            CredentialRevealService.record_failure(user_id, self.credential.pk)
+            CredentialRevealService.audit(
+                request=self.request,
+                credential=self.credential,
+                status=CredentialRevealAudit.Status.FAILED,
+                reason="wrong_username",
+            )
             return self.form_invalid(form)
         if not self.request.user.check_password(password):
-            form.add_error("account_password", "Неверный пароль учетной записи NetBox.")
+            form.add_error("account_password", "Invalid NetBox account password.")
+            CredentialRevealService.record_failure(user_id, self.credential.pk)
+            CredentialRevealService.audit(
+                request=self.request,
+                credential=self.credential,
+                status=CredentialRevealAudit.Status.FAILED,
+                reason="wrong_password",
+            )
             return self.form_invalid(form)
+
+        CredentialRevealService.reset_failures(user_id, self.credential.pk)
+        CredentialRevealService.audit(
+            request=self.request,
+            credential=self.credential,
+            status=CredentialRevealAudit.Status.SUCCESS,
+            reason="confirmed",
+        )
         update_session_auth_hash(self.request, self.request.user)
         context = self.get_context_data(form=form)
         context["reveal_success"] = True
@@ -143,7 +186,7 @@ class DevicePlatformProfileVersionsView(generic.ObjectView):
     queryset = DevicePlatformProfile.objects.select_related("device", "credential")
     template_name = "main/configuration_versions.html"
     tab = ViewTab(
-        label="Версии конфигураций",
+        label="Configuration versions",
         badge=lambda obj: ConfigurationBackup.objects.filter(device=obj.device).count(),
         weight=500,
     )
@@ -293,12 +336,12 @@ class DevicePlatformProfileCLIView(View):
         profile = get_object_or_404(DevicePlatformProfile.objects.select_related("device"), pk=pk)
         form = forms.DeviceCommandForm(request.POST)
         if not form.is_valid():
-            messages.error(request, "Проверьте список команд.")
+            messages.error(request, "Check the command list.")
             return redirect(profile.get_absolute_url())
 
         commands = [line.strip() for line in form.cleaned_data["commands"].splitlines() if line.strip()]
         if not commands:
-            messages.error(request, "Введите хотя бы одну команду.")
+            messages.error(request, "Enter at least one command.")
             return redirect(profile.get_absolute_url())
 
         logger.info(
@@ -331,9 +374,9 @@ class DevicePlatformProfileCLIView(View):
         messages.success(
             request,
             (
-                "Команды выполнены. "
-                f"Создана конфигурация v{configuration.version}. "
-                f"Вывод: {output[:300]}"
+                "Commands executed. "
+                f"Created configuration v{configuration.version}. "
+                f"Output: {output[:300]}"
             ),
         )
         return redirect(configuration.get_absolute_url())
@@ -350,7 +393,7 @@ class DevicePlatformProfileRefreshConfigView(ObjectPermissionRequiredMixin, View
         try:
             result = ConfigurationService.refresh_device_config(profile.device)
         except Exception as exc:
-            messages.error(request, f"Не удалось получить конфигурацию: {exc}")
+            messages.error(request, f"Failed to fetch configuration: {exc}")
             logger.exception(
                 "Manual device configuration refresh failed %s user=%s",
                 device_log_context(profile.device, profile),
@@ -360,9 +403,9 @@ class DevicePlatformProfileRefreshConfigView(ObjectPermissionRequiredMixin, View
 
         backup = result["backup"]
         if result["changed"]:
-            messages.success(request, f"Конфигурация обновлена. Создана версия v{backup.version}.")
+            messages.success(request, f"Configuration refreshed. Created version v{backup.version}.")
         else:
-            messages.success(request, f"Конфигурация не изменилась. Текущая версия v{backup.version}.")
+            messages.success(request, f"Configuration unchanged. Current version is v{backup.version}.")
         return redirect(backup.get_absolute_url())
 
 
@@ -440,7 +483,7 @@ class CommandTemplatePreviewView(FormView):
             rendered = self.template.render(form.cleaned_data["params"])
             context["commands"] = CommandGenerator.split_rendered_commands(rendered)
         except KeyError as exc:
-            form.add_error("params", f"Не хватает параметра: {exc}")
+            form.add_error("params", f"Missing template parameter: {exc}")
             return self.form_invalid(form)
         return self.render_to_response(context)
 
@@ -537,7 +580,7 @@ class ConfigurationBackupRestoreView(View):
                 request.user,
             )
         except Exception as exc:
-            messages.error(request, f"Не удалось отправить конфигурацию на устройство: {exc}")
+            messages.error(request, f"Failed to send configuration to device: {exc}")
             logger.exception(
                 "Configuration restore request failed %s backup_id=%s user=%s",
                 device_log_context(backup.device),
@@ -559,7 +602,7 @@ class DeviceConfigurationsView(generic.ObjectView):
     queryset = Device.objects.all()
     template_name = "main/device_configurations.html"
     tab = ViewTab(
-        label="Конфигурации",
+        label="Configurations",
         visible=_device_has_config_weaver_profile,
         badge=lambda obj: ConfigurationBackup.objects.filter(device=obj).count(),
         weight=2150,
@@ -594,7 +637,7 @@ class ConfigurationBackupRefreshView(ObjectPermissionRequiredMixin, View):
                 source="manual_refresh",
             )
         except Exception as exc:
-            messages.error(request, f"Не удалось проверить конфигурацию: {exc}")
+            messages.error(request, f"Failed to validate configuration: {exc}")
             logger.exception(
                 "Manual configuration backup refresh failed %s backup_id=%s user=%s",
                 device_log_context(backup.device),
@@ -607,10 +650,10 @@ class ConfigurationBackupRefreshView(ObjectPermissionRequiredMixin, View):
         if result["changed"]:
             messages.warning(
                 request,
-                f"Конфигурация на устройстве отличается. Создана новая версия v{refreshed.version}.",
+                f"Configuration drift detected on device. Created new version v{refreshed.version}.",
             )
             return redirect(refreshed.get_absolute_url())
-        messages.success(request, f"Конфигурация на устройстве совпадает с v{backup.version}.")
+        messages.success(request, f"Device configuration matches v{backup.version}.")
         return redirect(backup.get_absolute_url())
 
 

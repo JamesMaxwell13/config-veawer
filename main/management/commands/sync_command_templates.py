@@ -34,6 +34,10 @@ class Command(BaseCommand):
                 "command_body": template.command_body,
                 "is_active": template.is_active,
                 "revision": template.revision,
+                "bound_entity_type": getattr(template, "bound_entity_type", "") or "",
+                "bound_parameter": getattr(template, "bound_parameter", "") or "",
+                "bound_direction": getattr(template, "bound_direction", "both") or "both",
+                "binding_priority": int(getattr(template, "binding_priority", 100) or 100),
             }
 
             existing = CommandTemplate.objects.filter(**lookup).first()

@@ -152,7 +152,7 @@ class ScheduledTaskLogicTests(TestCase):
             ):
                 result = TaskExecutor._apply_commands(profile, task, ["hostname scheduled-r1-after"])
 
-        self.assertIn("Сценарий применен", result)
+        self.assertIn("Scenario applied", result)
         session.send_config_set.assert_called_once_with(["hostname scheduled-r1-after"])
         self.assertEqual(ConfigurationBackup.objects.filter(device=device).count(), 1)
         self.assertFalse(ConfigurationBackup.objects.filter(device=device, source="pre_apply").exists())

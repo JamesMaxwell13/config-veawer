@@ -44,12 +44,12 @@ class DeviceTerminalViewTests(TestCase):
         response = self.client.get(self.profile.get_absolute_url())
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Доступные команды")
-        self.assertContains(response, "Открыть команды")
+        self.assertContains(response, "Available commands")
+        self.assertContains(response, "Open commands")
         self.assertContains(response, reverse("plugins:main:commandtemplate_list"))
         self.assertContains(response, "vendor=cisco")
         self.assertContains(response, "platform=cisco_ios")
-        self.assertNotContains(response, "CLI устройства")
+        self.assertNotContains(response, "Device CLI")
         self.assertNotContains(response, "device-cli-form")
 
     def test_netbox_device_page_has_configurations_button(self):
@@ -61,7 +61,7 @@ class DeviceTerminalViewTests(TestCase):
             self.profile.get_absolute_url(),
         )
         self.assertContains(response, 'class="btn btn-secondary"')
-        self.assertContains(response, "Профиль Config Weaver")
+        self.assertContains(response, "Config Weaver profile")
         self.assertNotContains(
             response,
             reverse("plugins:main:deviceplatformprofile_terminal", kwargs={"pk": self.profile.pk}),
@@ -77,8 +77,8 @@ class DeviceTerminalViewTests(TestCase):
             response,
             reverse("plugins:main:deviceplatformprofile_terminal", kwargs={"pk": self.profile.pk}),
         )
-        self.assertContains(response, "Устройство NetBox")
-        self.assertContains(response, "Профиль Config Weaver")
+        self.assertContains(response, "NetBox device")
+        self.assertContains(response, "Config Weaver profile")
 
     def test_terminal_page_renders_websocket_path(self):
         response = self.client.get(

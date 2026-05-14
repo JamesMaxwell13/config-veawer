@@ -1,4 +1,6 @@
 from __future__ import annotations
+import ipaddress
+import re
 from typing import Any
 
 import yaml
@@ -154,6 +156,55 @@ class ConfigurationValidator:
         "reload",
         "format flash",
     )
+    _IPV4_TOKEN_RE = re.compile(r"^\d{1,3}(?:\.\d{1,3}){3}$")
+
+    @classmethod
+    def _is_ipv4_token(cls, token: str) -> bool:
+        return bool(cls._IPV4_TOKEN_RE.fullmatch(token))
+
+    @staticmethod
+    def _is_valid_ipv4(value: str) -> bool:
+        try:
+            ipaddress.IPv4Address(value)
+            return True
+        except ipaddress.AddressValueError:
+            return False
+
+    @staticmethod
+    def _mask_kind(mask: str) -> str | None:
+        try:
+            network = ipaddress.IPv4Network(f"0.0.0.0/{mask}", strict=False)
+        except (ipaddress.NetmaskValueError, ValueError):
+            return None
+        if str(network.netmask) == mask:
+            return "netmask"
+        if str(network.hostmask) == mask:
+            return "wildcard"
+        return None
+
+    @classmethod
+    def _validate_ipv4_mask_pairs(cls, commands: list[str]) -> list[str]:
+        errors: list[str] = []
+        for command in commands:
+            normalized = " ".join(command.strip().split())
+            if not normalized:
+                continue
+            tokens = [token.strip(",;") for token in normalized.split()]
+            for index in range(len(tokens) - 1):
+                first = tokens[index]
+                second = tokens[index + 1]
+                if not cls._is_ipv4_token(first) or not cls._is_ipv4_token(second):
+                    continue
+                if not cls._is_valid_ipv4(first):
+                    errors.append(
+                        f"Invalid IPv4 address '{first}' in command: {normalized}"
+                    )
+                    continue
+                if cls._mask_kind(second) is None:
+                    errors.append(
+                        f"Invalid IPv4 mask '{second}' in command: {normalized}"
+                    )
+        return errors
 
     @classmethod
     def validate_commands(cls, commands: list[str]) -> tuple[bool, list[str]]:
@@ -165,4 +216,5 @@ class ConfigurationValidator:
         forbidden = [c for c in commands if any(p in c.strip().lower() for p in cls.FORBIDDEN_PATTERNS)]
         if forbidden:
             errors.append(f"Forbidden commands found: {forbidden}")
+        errors.extend(cls._validate_ipv4_mask_pairs(commands))
         return len(errors) == 0, errors

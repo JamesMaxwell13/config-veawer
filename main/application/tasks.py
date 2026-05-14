@@ -97,8 +97,8 @@ class TaskExecutor:
                 target_backup.version,
             )
             return (
-                f"Сценарий применен через {profile.platform}; "
-                f"текущая конфигурация совпадает с v{target_backup.version}, новая версия не создана"
+                f"Scenario applied via {profile.platform}; "
+                f"running configuration matches v{target_backup.version}, no new version created"
             )
 
         configuration = ConfigurationVCS.write_backup(device, running, task=None, source="runtime")
@@ -110,8 +110,8 @@ class TaskExecutor:
             configuration.pk,
         )
         return (
-            f"Сценарий применен через {profile.platform}; "
-            f"создана конфигурация v{configuration.version}"
+            f"Scenario applied via {profile.platform}; "
+            f"configuration v{configuration.version} created"
         )
 
     @staticmethod
@@ -197,7 +197,7 @@ class TaskExecutor:
             configuration.version,
             configuration.pk,
         )
-        return f"Конфигурация сохранена: v{configuration.version}"
+        return f"Configuration saved: v{configuration.version}"
 
     @staticmethod
     def _run_healthcheck(task: ScheduledTask) -> str:
@@ -254,8 +254,8 @@ class TaskExecutor:
                 backup.version,
             )
             return (
-                f"Конфигурация v{backup.version} отправлена на устройство; "
-                "текущая конфигурация совпадает, новая версия не создана"
+                f"Configuration v{backup.version} sent to device; "
+                "running configuration matches, no new version created"
             )
 
         new_configuration = ConfigurationVCS.write_backup(
@@ -273,8 +273,8 @@ class TaskExecutor:
             new_configuration.pk,
         )
         return (
-            f"Конфигурация v{backup.version} отправлена на устройство; "
-            f"текущая конфигурация сохранена как v{new_configuration.version}"
+            f"Configuration v{backup.version} sent to device; "
+            f"running configuration saved as v{new_configuration.version}"
         )
 
     @staticmethod

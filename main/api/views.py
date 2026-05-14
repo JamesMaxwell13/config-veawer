@@ -38,6 +38,7 @@ from main.models import (
 )
 from main.application.backups import ConfigurationService
 from main.application.gitlab import GitLabIntegrationService
+from main.application.interface_sync import InterfaceSyncService
 
 
 def _gitlab_result_payload(result):
@@ -131,10 +132,12 @@ class ConfigurationBackupViewSet(NetBoxModelViewSet):
     def perform_create(self, serializer):
         super().perform_create(serializer)
         GitLabIntegrationService.push_backup_to_gitlab(serializer.instance)
+        InterfaceSyncService.sync_from_configuration_backup(serializer.instance, origin="api_backup_create")
 
     def perform_update(self, serializer):
         super().perform_update(serializer)
         GitLabIntegrationService.push_backup_to_gitlab(serializer.instance)
+        InterfaceSyncService.sync_from_configuration_backup(serializer.instance, origin="api_backup_update")
 
     @extend_schema(
         parameters=[

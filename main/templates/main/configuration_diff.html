@@ -1,13 +1,13 @@
 {% extends 'base/layout.html' %}
 
-{% block title %}Сравнение конфигураций{% endblock %}
+{% block title %}Configuration diff{% endblock %}
 
 {% block content %}
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Сравнение конфигураций {{ device.name }}</span>
+    <span>Configuration diff {{ device.name }}</span>
     {% if profile %}
-      <a class="btn btn-sm btn-secondary" href="{% url 'plugins:main:deviceplatformprofile_versions' pk=profile.pk %}">Назад</a>
+      <a class="btn btn-sm btn-secondary" href="{% url 'plugins:main:deviceplatformprofile_versions' pk=profile.pk %}">Back</a>
     {% endif %}
   </div>
   <div class="card-body">

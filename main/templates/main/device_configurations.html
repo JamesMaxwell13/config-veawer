@@ -6,7 +6,7 @@
     <form method="post" action="{% url 'plugins:main:deviceplatformprofile_refresh_config' pk=profile.pk %}" class="d-inline-block">
       {% csrf_token %}
       <button type="submit" class="btn btn-info">
-        <i class="mdi mdi-refresh"></i> Получить конфигурацию
+        <i class="mdi mdi-refresh"></i> Refresh configuration
       </button>
     </form>
   {% endif %}
@@ -16,7 +16,7 @@
   <div class="row">
     <div class="col col-12">
       <div class="card">
-        <h5 class="card-header">Текущая конфигурация</h5>
+        <h5 class="card-header">Current configuration</h5>
         <div class="card-body">
           {% if current_configuration %}
             <div class="mb-2 text-secondary">
@@ -26,7 +26,7 @@
             </div>
             <pre class="mb-0 yaml-code-block"><code data-yaml-highlight>{{ current_yaml }}</code></pre>
           {% else %}
-            <div class="text-muted">Конфигураций пока нет.</div>
+            <div class="text-muted">No configurations yet.</div>
           {% endif %}
         </div>
       </div>
@@ -36,15 +36,15 @@
   <div class="row mt-3">
     <div class="col col-12">
       <div class="card">
-        <h5 class="card-header">Предыдущие конфигурации</h5>
+        <h5 class="card-header">Previous configurations</h5>
         <div class="card-body">
           <table class="table table-hover">
             <thead>
               <tr>
-                <th>Версия</th>
-                <th>Название</th>
-                <th>Дата</th>
-                <th>Источник</th>
+                <th>Version</th>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Source</th>
                 <th>Checksum</th>
                 <th></th>
               </tr>
@@ -61,14 +61,14 @@
                     <form method="post" action="{% url 'plugins:main:configurationbackup_restore' pk=configuration.pk %}" class="d-inline-block">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-success">
-                        <i class="mdi mdi-backup-restore"></i> Отправить на устройство
+                        <i class="mdi mdi-backup-restore"></i> Apply to device
                       </button>
                     </form>
                   </td>
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="6" class="text-muted">Предыдущих конфигураций пока нет.</td>
+                  <td colspan="6" class="text-muted">No previous configurations yet.</td>
                 </tr>
               {% endfor %}
             </tbody>
